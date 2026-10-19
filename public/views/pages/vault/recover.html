@@ -1,0 +1,29 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card mt-3">
+            <div class="card-body p-4">
+                <h1 class="h4 fw-bold">Reset your master password</h1>
+                <p class="text-muted">Enter the recovery code you saved when you set up the vault, then choose a new master password. You'll get a new recovery code afterwards.</p>
+                <form method="post" autocomplete="off">
+                    {{ csrf_field() }}<input type="hidden" name="action" value="recover">
+                    <div class="mb-3"><label class="form-label">Recovery code</label><input name="code" class="form-control form-control-lg font-monospace" placeholder="XXXX-XXXX-XXXX-…" required></div>
+                    <div class="mb-3"><label class="form-label">New master password</label><input type="password" name="master" id="master" class="form-control" autocomplete="new-password" required minlength="12">
+                        <div class="strength s0" id="meter"><span></span><span></span><span></span><span></span><span></span></div></div>
+                    <div class="mb-3"><label class="form-label">Type it again</label><input type="password" name="master2" class="form-control" autocomplete="new-password" required></div>
+                    <div class="mb-3"><label class="form-label">Hint (optional)</label><input name="hint" class="form-control" maxlength="128"></div>
+                    <button class="btn btn-primary">Reset master password</button>
+                    <a href="/vault" class="btn btn-link">Cancel</a>
+                </form>
+                <hr>
+                <p class="small text-muted mb-0">Lost both the master password and the recovery code? There's no way to read the vault, by design. You can erase it and start again from <a href="/vault/settings">Vault settings</a> once unlocked, or ask an administrator to reset it from Admin → Users.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/public/assets/js/vault.js?v=1"></script>
+<script>$('#master').on('input', function () { meter('#meter', this.value); });</script>
+{% endblock %}

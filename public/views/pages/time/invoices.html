@@ -1,0 +1,39 @@
+{% extends "bases/base-admin.html" %}
+{% set f = data.f %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Invoices</h1><div class="sub">{{ data.invoices|length }} shown</div></div>
+    <div class="actions"><a href="/time/invoice-new" class="btn btn-primary"><i data-feather="plus"></i> New invoice</a></div>
+</div>
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3"><div class="card kpi mb-0"><a href="?status=outstanding" class="stretched-link"></a><div class="label">Outstanding</div><div class="value money">{{ data.sum.outstanding|money }}</div></div></div>
+    <div class="col-6 col-lg-3"><div class="card kpi mb-0"><a href="?status=overdue" class="stretched-link"></a><div class="label">Overdue</div><div class="value money {{ data.sum.overdue > 0 ? 'neg' }}">{{ data.sum.overdue|money }}</div></div></div>
+    <div class="col-6 col-lg-3"><div class="card kpi mb-0"><a href="?status=draft" class="stretched-link"></a><div class="label">In draft</div><div class="value money">{{ data.sum.draft|money }}</div></div></div>
+    <div class="col-6 col-lg-3"><div class="card kpi mb-0"><a href="/time/reports?type=revenue&range=year" class="stretched-link"></a><div class="label">Paid this year</div><div class="value money">{{ data.paid_year|money }}</div></div></div>
+</div>
+<form class="filters mb-3 js-autosubmit" method="get">
+    <input type="search" name="q" value="{{ f.q }}" class="form-control" placeholder="Number, client, title">
+    <select name="client" class="form-select"><option value="">All clients</option>{% for c in data.client_options %}<option value="{{ c.id }}" {{ f.client == c.id ? 'selected' }}>{{ c.name }}</option>{% endfor %}</select>
+    <select name="status" class="form-select"><option value="">Any status</option><option value="outstanding" {{ f.status == 'outstanding' ? 'selected' }}>Outstanding</option><option value="overdue" {{ f.status == 'overdue' ? 'selected' }}>Overdue</option>{% for k, v in data.statuses %}<option value="{{ k }}" {{ f.status == k ? 'selected' }}>{{ v }}</option>{% endfor %}</select>
+</form>
+<div class="card card-flush">
+    <div class="table-responsive"><table class="table table-hover mb-0">
+        <thead><tr><th>Invoice</th><th>Client</th><th>Issued</th><th>Due</th><th>Status</th><th class="text-end">Total</th><th class="text-end">Balance</th></tr></thead>
+        <tbody>
+        {% for i in data.invoices %}
+            <tr data-href="/time/invoice/{{ i.id }}" class="cursor-pointer">
+                <td class="fw-600">{{ i.number }}{% if i.title %}<div class="small-muted fw-normal">{{ i.title }}</div>{% endif %}</td>
+                <td><span class="color-dot me-1" style="background:{{ i.client_color }}"></span>{{ i.client_name }}</td>
+                <td class="small">{{ i.issue_date|nicedate('M j, Y') }}</td>
+                <td class="small {{ i.overdue ? 'text-danger fw-600' }}">{{ i.due_date ? i.due_date|nicedate('M j, Y') : '—' }}</td>
+                <td><span class="chip status-{{ i.overdue ? 'overdue' : i.status }}">{{ i.overdue ? 'Overdue' : data.statuses[i.status] }}</span>{% if i.viewed_at and i.status != 'paid' %} <span class="chip" title="Opened by the client">👁 seen</span>{% endif %}</td>
+                <td class="text-end money">{{ i.total|money }}</td>
+                <td class="text-end money fw-600">{{ i.status in ['void', 'paid'] ? '—' : i.balance|money }}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="7"><div class="empty"><div class="big">🧾</div>No invoices yet. Track some time, then make one from it.</div></td></tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+</div>
+{% endblock %}

@@ -1,0 +1,59 @@
+{# Add / edit a time entry. Needs data.project_options, data.services, data.client_options #}
+<div class="modal fade" id="entryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" id="entryForm" autocomplete="off">
+            <div class="modal-header"><h5 class="modal-title">Time entry</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" name="action" value="save"><input type="hidden" name="id">
+                <div class="alert alert-warning small p-2 hidden" id="entryLocked">This time is on an invoice. Change it on the invoice instead.</div>
+                <div class="mb-2"><label class="form-label">Project</label>
+                    <select name="project_id" class="form-select">
+                        <option value="">No project</option>
+                        {% for client, ps in data.project_options %}<optgroup label="{{ client }}">{% for p in ps %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</optgroup>{% endfor %}
+                    </select></div>
+                <div class="mb-2 js-client-row"><label class="form-label">Client (when there's no project)</label>
+                    <select name="client_id" class="form-select"><option value="">—</option>{% for c in data.client_options %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6"><label class="form-label">Service</label><select name="service_id" class="form-select"><option value="">—</option>{% for s in data.services %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></div>
+                    <div class="col-3"><label class="form-label">Date</label><input type="date" name="date" class="form-control" value="{{ base.today }}"></div>
+                    <div class="col-3"><label class="form-label">Hours</label><input name="duration" class="form-control" placeholder="1:30" inputmode="decimal"></div>
+                </div>
+                <textarea name="notes" class="form-control mb-2" rows="3" placeholder="Notes (show on detailed invoices)"></textarea>
+                <label class="form-check"><input type="checkbox" name="billable" value="1" class="form-check-input" checked> <span class="form-check-label">Billable</span></label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger me-auto js-entry-delete hidden">Delete</button>
+                <button type="button" class="btn btn-light js-entry-resume hidden"><i data-feather="play"></i> Start again</button>
+                <button class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const T = '/app/Ajax/time.php', f = document.getElementById('entryForm');
+    const clientRow = () => $('#entryForm .js-client-row').toggleClass('hidden', !!f.project_id.value);
+    $(f.project_id).on('change', clientRow);
+    window.openEntry = function (id, preset) {
+        f.reset(); f.id.value = ''; f.date.value = (window.HOME || {}).today || '';
+        $('#entryLocked').addClass('hidden'); $('#entryForm button.btn-primary').prop('disabled', false);
+        $('.js-entry-delete, .js-entry-resume').toggleClass('hidden', !id);
+        if (preset) Object.entries(preset).forEach(([k, v]) => { if (f[k]) f[k].value = v; });
+        const show = () => { clientRow(); bootstrap.Modal.getOrCreateInstance(document.getElementById('entryModal')).show(); setTimeout(() => (id ? f.notes : f.duration).focus(), 250); };
+        if (!id) { show(); return; }
+        api(T, { action: 'get', id }).then(r => {
+            const e = r.entry;
+            ['id', 'project_id', 'client_id', 'service_id', 'date', 'notes'].forEach(k => f[k].value = e[k] == null ? '' : e[k]);
+            f.duration.value = e.running ? '' : e.duration_text;
+            f.duration.placeholder = e.running ? 'running…' : '1:30';
+            f.billable.checked = e.billable == 1;
+            if (e.invoice_id && ['sent', 'partial', 'paid'].includes(e.invoice_status)) { $('#entryLocked').removeClass('hidden'); $('#entryForm button.btn-primary').prop('disabled', true); }
+            show();
+        });
+    };
+    $(document).on('click', '.js-entry', function (e) { if ($(e.target).closest('.js-noentry').length) return; e.preventDefault(); openEntry($(this).data('id') || null, $(this).data('preset') || null); });
+    $(f).on('submit', function (e) { e.preventDefault(); api(T, new FormData(this)).then(r => { ShowAlert(r.message, 'success'); setTimeout(() => location.reload(), 300); }); });
+    $('.js-entry-delete').on('click', function () { if (confirm('Delete this time entry?')) api(T, { action: 'delete', id: f.id.value }).then(() => location.reload()); });
+    $('.js-entry-resume').on('click', function () { api(T, { action: 'resume', id: f.id.value }).then(() => location.reload()); });
+});
+</script>

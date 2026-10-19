@@ -1,0 +1,54 @@
+<div class="modal fade" id="clientModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <form class="modal-content" method="post" id="clientForm">
+            {{ csrf_field() }}<input type="hidden" name="action" value="client-save"><input type="hidden" name="id">
+            <div class="modal-header"><h5 class="modal-title">Client</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="row g-2">
+                    <div class="col-md-9"><label class="form-label">Company / client name</label><input name="name" class="form-control form-control-lg" required></div>
+                    <div class="col-md-3"><label class="form-label">Color</label><input type="color" name="color" class="form-control form-control-color w-100" style="height:46px" value="#3b7ddd"></div>
+                    <div class="col-md-6"><label class="form-label">Contact first name</label><input name="contact_first" class="form-control"></div>
+                    <div class="col-md-6"><label class="form-label">Last name</label><input name="contact_last" class="form-control"></div>
+                    <div class="col-md-6"><label class="form-label">Email (invoices go here)</label><input name="email" type="email" class="form-control"></div>
+                    <div class="col-md-6"><label class="form-label">CC on invoices</label><input name="cc_emails" class="form-control" placeholder="ap@client.com, boss@client.com"></div>
+                    <div class="col-md-6"><label class="form-label">Phone</label><input name="phone" class="form-control"></div>
+                    <div class="col-md-6"><label class="form-label">Website</label><input name="website" class="form-control"></div>
+                    <div class="col-md-6"><label class="form-label">Address</label><input name="address1" class="form-control mb-1"><input name="address2" class="form-control" placeholder="Suite / unit"></div>
+                    <div class="col-md-6"><div class="row g-2">
+                        <div class="col-7"><label class="form-label">City</label><input name="city" class="form-control"></div>
+                        <div class="col-5"><label class="form-label">State</label><input name="state" class="form-control"></div>
+                        <div class="col-6"><label class="form-label">ZIP</label><input name="zip" class="form-control"></div>
+                        <div class="col-6"><label class="form-label">Country</label><input name="country" class="form-control"></div>
+                    </div></div>
+                    <div class="col-md-4"><label class="form-label">Default hourly rate</label><div class="input-group"><span class="input-group-text">$</span><input name="default_rate" class="form-control" inputmode="decimal" placeholder="{{ setting('default_rate') }}"></div></div>
+                    <div class="col-md-4"><label class="form-label">Payment terms (days)</label><input name="payment_terms" type="number" min="0" class="form-control" placeholder="{{ setting('invoice_terms') }}"></div>
+                    <div class="col-md-4"><label class="form-label">Currency</label><input name="currency" class="form-control" maxlength="3" placeholder="{{ setting('currency') }}"></div>
+                    <div class="col-12"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
+                    <div class="col-12 d-flex gap-3">
+                        <label class="form-check js-new-only"><input type="checkbox" name="with_project" value="1" class="form-check-input" checked> <span class="form-check-label">Also create a "General" project</span></label>
+                        <label class="form-check js-edit-only"><input type="checkbox" name="archived" value="1" class="form-check-input"> <span class="form-check-label">Archived</span></label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" form="clientDelete" class="btn btn-outline-danger me-auto js-edit-only">Delete</button>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary">Save client</button>
+            </div>
+        </form>
+        <form method="post" id="clientDelete" data-confirm="Delete this client and its projects? Only works if it has no time or invoices.">{{ csrf_field() }}<input type="hidden" name="action" value="client-delete"><input type="hidden" name="id"></form>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    $(document).on('click', '.js-client', function () {
+        const c = $(this).data('client') || {}, f = document.getElementById('clientForm');
+        f.reset(); f.id.value = c.id || '';
+        Object.entries(c).forEach(([k, v]) => { if (f[k] && f[k].type !== 'checkbox' && v != null) f[k].value = v; });
+        f.archived.checked = c.archived == 1;
+        $('#clientForm .js-new-only').toggleClass('hidden', !!c.id); $('.js-edit-only').toggleClass('hidden', !c.id);
+        $('#clientDelete [name=id]').val(c.id || '');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('clientModal')).show();
+    });
+});
+</script>

@@ -1,0 +1,75 @@
+{% extends "bases/base-admin.html" %}
+{% set s = data.s %}
+{% block body %}
+<div class="page-head"><div><h1>Settings</h1><div class="sub">For everyone using {{ s.site_name }}.</div></div></div>
+
+{% if not data.https or data.writable or not data.cron_ok %}
+<div class="card border-warning"><div class="card-body small">
+    <strong>Server checks</strong>
+    <ul class="mb-0 mt-1">
+        {% if not data.https %}<li>This page isn't on HTTPS. Run <code>sudo certbot --apache -d home.300interactive.com</code>. The vault and logins need it.</li>{% endif %}
+        {% for d in data.writable %}<li><code>{{ d }}</code> isn't writable: <code>sudo chown -R www-data:www-data storage</code></li>{% endfor %}
+        {% if not data.cron_ok %}<li>The cron job hasn't run in the last 10 minutes, so reminder emails and the morning email won't go out. Add <code>* * * * * php {{ constant('ROOT') }}dev/cron.php</code> to the www-data crontab.</li>{% endif %}
+    </ul>
+</div></div>
+{% endif %}
+
+<form method="post">
+    {{ csrf_field() }}<input type="hidden" name="action" value="settings">
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header"><h5 class="card-title">General</h5></div>
+                <div class="card-body"><div class="row g-3">
+                    <div class="col-md-6"><label class="form-label">Site name</label><input name="site_name" class="form-control" value="{{ s.site_name }}"></div>
+                    <div class="col-md-6"><label class="form-label">Currency</label><input name="currency" class="form-control" value="{{ s.currency }}" maxlength="3"></div>
+                    <div class="col-md-6"><label class="form-label">Time zone</label><select name="timezone" class="form-select">{% for tz in data.timezones %}<option {{ tz == s.timezone ? 'selected' }}>{{ tz }}</option>{% endfor %}</select></div>
+                    <div class="col-md-6"><label class="form-label">Week starts on</label><select name="week_start" class="form-select"><option value="monday">Monday</option><option value="sunday" {{ s.week_start == 'sunday' ? 'selected' }}>Sunday</option></select></div>
+                    <div class="col-md-6"><label class="form-label">Morning email at</label><select name="digest_hour" class="form-select">{% for hh in 5..10 %}<option value="{{ hh }}" {{ s.digest_hour == hh ? 'selected' }}>{{ hh }}:00 AM</option>{% endfor %}</select></div>
+                    <div class="col-md-6"><label class="form-label">Vault locks after (min, new vaults)</label><input name="vault_auto_lock" type="number" min="1" class="form-control" value="{{ s.vault_auto_lock }}"></div>
+                </div></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h5 class="card-title">Time tracking</h5></div>
+                <div class="card-body"><div class="row g-3">
+                    <div class="col-md-6"><label class="form-label">Default hourly rate</label><div class="input-group"><span class="input-group-text">$</span><input name="default_rate" class="form-control" value="{{ s.default_rate }}"></div></div>
+                    <div class="col-md-6"><label class="form-label">Round time up to</label><select name="round_minutes" class="form-select">{% for m in [0, 1, 5, 6, 10, 15, 30] %}<option value="{{ m }}" {{ s.round_minutes == m ? 'selected' }}>{{ m ? m ~ ' minutes' : "Don't round" }}</option>{% endfor %}</select></div>
+                </div></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h5 class="card-title">Email</h5></div>
+                <div class="card-body small">
+                    <div>Sending with <strong>{{ data.mail.driver == 'log' ? 'the log driver (emails are written to storage/logs, not sent)' : data.mail.host }}</strong>{% if data.mail.from %} from {{ data.mail.from }}{% endif %}. Change in <code>settings/mail.ini.php</code>.</div>
+                    <div class="mt-1">{{ data.queue.waiting }} waiting · {{ data.queue.failed }} failed{% if data.queue.last_error %} · last error: {{ data.queue.last_error }}{% endif %}</div>
+                    <button type="submit" form="testMail" class="btn btn-light btn-sm mt-2">Send me a test email</button>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header"><h5 class="card-title">Your business (shown on invoices)</h5></div>
+                <div class="card-body"><div class="row g-3">
+                    <div class="col-md-6"><label class="form-label">Business name</label><input name="company_name" class="form-control" value="{{ s.company_name }}"></div>
+                    <div class="col-md-6"><label class="form-label">Email</label><input name="company_email" class="form-control" value="{{ s.company_email }}"></div>
+                    <div class="col-md-6"><label class="form-label">Phone</label><input name="company_phone" class="form-control" value="{{ s.company_phone }}"></div>
+                    <div class="col-12"><label class="form-label">Address</label><textarea name="company_address" class="form-control" rows="3">{{ s.company_address }}</textarea></div>
+                    <div class="col-12"><label class="form-label">How to pay you</label><textarea name="payment_instructions" class="form-control" rows="3" placeholder="Check payable to… / Zelle to… / ACH details on request">{{ s.payment_instructions }}</textarea></div>
+                </div></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h5 class="card-title">Invoices</h5></div>
+                <div class="card-body"><div class="row g-3">
+                    <div class="col-md-4"><label class="form-label">Number prefix</label><input name="invoice_prefix" class="form-control" value="{{ s.invoice_prefix }}"></div>
+                    <div class="col-md-4"><label class="form-label">Next number</label><input name="invoice_next" type="number" class="form-control" value="{{ s.invoice_next }}"></div>
+                    <div class="col-md-4"><label class="form-label">Due in (days)</label><input name="invoice_terms" type="number" class="form-control" value="{{ s.invoice_terms }}"></div>
+                    <div class="col-md-6"><label class="form-label">Tax name</label><input name="tax_name" class="form-control" value="{{ s.tax_name }}" placeholder="none"></div>
+                    <div class="col-md-6"><label class="form-label">Tax %</label><input name="tax_rate" class="form-control" value="{{ s.tax_rate }}"></div>
+                    <div class="col-12"><label class="form-label">Default note</label><textarea name="invoice_notes" class="form-control" rows="2">{{ s.invoice_notes }}</textarea></div>
+                </div></div>
+            </div>
+        </div>
+    </div>
+    <button class="btn btn-primary btn-lg">Save settings</button>
+</form>
+<form method="post" id="testMail">{{ csrf_field() }}<input type="hidden" name="action" value="test-email"></form>
+{% endblock %}

@@ -1,0 +1,84 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="page-head">
+    <div><h1>New invoice</h1><div class="sub">Pick a client. Unbilled time, flat fees and billable expenses are pulled in for you.</div></div>
+</div>
+
+{% if not data.client_id %}
+    <div class="card card-flush">
+        {% for c in data.client_options %}
+            {% set u = data.unbilled_by_client[c.id] ?? 0 %}
+            <a href="?client={{ c.id }}" class="list-row text-decoration-none">
+                <span class="avatar-initials" style="background:{{ c.color }};border-radius:9px">{{ c.name|initials }}</span>
+                <div class="grow"><div class="title">{{ c.name }}</div></div>
+                <span class="money {{ u > 0 ? 'fw-600 text-primary' : 'text-muted' }}">{{ u > 0 ? (u|money) ~ ' unbilled' : 'nothing unbilled' }}</span>
+                <i data-feather="chevron-right" class="text-muted"></i>
+            </a>
+        {% else %}
+            <div class="empty">Add a client first. <a href="/time/clients?new=1">New client</a></div>
+        {% endfor %}
+    </div>
+{% else %}
+    {% set u = data.unbilled %}
+    {% set client = data.client_options|filter(c => c.id == data.client_id)|first %}
+    <form method="post">
+        {{ csrf_field() }}<input type="hidden" name="action" value="invoice-create"><input type="hidden" name="client_id" value="{{ data.client_id }}">
+        <div class="row">
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-header d-flex align-items-center"><h5 class="card-title">{{ client.name }}</h5><a href="/time/invoice-new" class="ms-auto small">Change client</a></div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6"><label class="form-label">Time from</label><input type="date" name="from" class="form-control" value="{{ data.oldest }}"></div>
+                            <div class="col-md-6"><label class="form-label">to</label><input type="date" name="to" class="form-control" value="{{ base.today }}"></div>
+                            <div class="col-12">
+                                <label class="form-label">Projects</label>
+                                {% for p in data.client_projects %}
+                                    <label class="form-check"><input type="checkbox" name="projects[]" value="{{ p.id }}" class="form-check-input" checked> <span class="form-check-label">{{ p.name }} <span class="text-muted small">· {{ data.billing[p.billing] }}</span></span></label>
+                                {% else %}<div class="small-muted">No projects.</div>{% endfor %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Show time on the invoice as</label>
+                                <select name="group" class="form-select">
+                                    <option value="service">One line per service</option>
+                                    <option value="project">One line per project</option>
+                                    <option value="day">One line per day</option>
+                                    <option value="entry">Every time entry</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6"><label class="form-label">Title (optional)</label><input name="title" class="form-control" placeholder="{{ 'now'|date('F Y') }} services"></div>
+                            <div class="col-12">
+                                <label class="form-check"><input type="checkbox" name="include_notes" value="1" class="form-check-input"> <span class="form-check-label">Add the time entries' notes to each line</span></label>
+                                <label class="form-check"><input type="checkbox" name="include_flat" value="1" class="form-check-input" checked> <span class="form-check-label">Include flat fees ({{ data.flat_total|money }})</span></label>
+                                <label class="form-check"><input type="checkbox" name="include_expenses" value="1" class="form-check-input" checked> <span class="form-check-label">Include billable expenses ({{ data.exp_total|money }})</span></label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex gap-2">
+                        <button class="btn btn-primary" {{ not u.entries and not u.expenses and not u.flat ? 'disabled' }}>Create invoice from unbilled</button>
+                        <button name="mode" value="blank" class="btn btn-light ms-auto">Blank invoice instead</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card card-flush">
+                    <div class="card-header"><h5 class="card-title">Unbilled for {{ client.name }}</h5></div>
+                    <div class="stat-strip border-bottom">
+                        <div><div class="l">Time</div><div class="v">{{ data.time_seconds|hm }}</div><div class="small-muted money">{{ data.time_total|money }}</div></div>
+                        <div><div class="l">Fees</div><div class="v money">{{ data.flat_total|money }}</div></div>
+                        <div><div class="l">Expenses</div><div class="v money">{{ data.exp_total|money }}</div></div>
+                    </div>
+                    <div style="max-height:420px;overflow:auto">
+                        {% for e in u.entries %}
+                            <div class="list-row"><div class="grow"><div class="title small">{{ e.project_name ?: 'No project' }}{{ e.service_name ? ' · ' ~ e.service_name }}</div><div class="meta">{{ e.date|nicedate('M j') }}{{ e.notes ? ' · ' ~ e.notes }}</div></div><div class="text-end"><div class="dur">{{ e.seconds|hm }}</div><div class="small-muted">{{ e.value|money }}</div></div></div>
+                        {% endfor %}
+                        {% for x in u.expenses %}<div class="list-row"><span class="chip chip-purple">expense</span><div class="grow small">{{ x.payee }} · {{ x.date|nicedate('M j') }}</div><span class="money">{{ x.amount|abs|money }}</span></div>{% endfor %}
+                        {% for pr in u.flat %}<div class="list-row"><span class="chip chip-blue">flat fee</span><div class="grow small">{{ pr.name }}</div><span class="money">{{ pr.flat_fee|money }}</span></div>{% endfor %}
+                        {% if not u.entries and not u.expenses and not u.flat %}<div class="empty">Nothing unbilled. You can still make a blank invoice.</div>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endif %}
+{% endblock %}

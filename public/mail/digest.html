@@ -1,0 +1,23 @@
+{{ header|raw }}
+<h2 style="margin:0 0 4px;font-size:22px">Good morning{{ data.first_name ? ', ' ~ data.first_name }}</h2>
+<p style="margin:0 0 20px;color:#8a939c">{{ data.date }}</p>
+{% if data.reminders %}
+<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#8a939c;margin:0 0 8px">Reminders</h3>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+{% for r in data.reminders %}<tr><td style="padding:7px 0;border-bottom:1px solid #f0f2f5">{{ r.overdue ? '🔴' : '○' }} {{ r.title }}</td><td align="right" style="padding:7px 0;border-bottom:1px solid #f0f2f5;color:#8a939c;font-size:13px">{{ r.overdue ? 'overdue' : r.time }}</td></tr>{% endfor %}
+</table>
+{% endif %}
+{% if data.bills %}
+<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#8a939c;margin:0 0 8px">Bills due</h3>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+{% for b in data.bills %}<tr><td style="padding:7px 0;border-bottom:1px solid #f0f2f5">🧾 {{ b.name }} <span style="color:#8a939c;font-size:13px">{{ b.when }}{{ b.autopay ? ' · autopay' }}</span></td><td align="right" style="padding:7px 0;border-bottom:1px solid #f0f2f5;font-weight:600">{{ b.amount_text }}</td></tr>{% endfor %}
+</table>
+{% endif %}
+{% if data.invoices %}
+<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#8a939c;margin:0 0 8px">Invoices past due</h3>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+{% for i in data.invoices %}<tr><td style="padding:7px 0;border-bottom:1px solid #f0f2f5">{{ i.number }} · {{ i.client }}</td><td align="right" style="padding:7px 0;border-bottom:1px solid #f0f2f5;font-weight:600;color:#c22738">{{ i.balance_text }}</td></tr>{% endfor %}
+</table>
+{% endif %}
+<a href="{{ data.url }}" style="display:inline-block;background:#3b7ddd;color:#fff;text-decoration:none;padding:10px 18px;border-radius:9px;font-weight:600">Open Home</a>
+{{ footer|raw }}

@@ -1,0 +1,100 @@
+{% extends "bases/base-admin.html" %}
+{% set p = data.project %}
+{% block body %}
+<div class="page-head">
+    <div>
+        <div class="small-muted"><a href="/time/clients">Clients</a> / <a href="/time/client/{{ p.client_id }}">{{ p.client_name }}</a> /</div>
+        <h1><span class="color-dot me-1" style="background:{{ p.color ?: p.client_color }};width:14px;height:14px"></span> {{ p.name }} {% if p.status != 'active' %}<span class="chip">{{ p.status }}</span>{% endif %}</h1>
+        <div class="sub">{{ data.billing[p.billing] }}{% if p.billing == 'hourly_project' and p.rate %} at {{ p.rate|money }}/h{% elseif p.billing == 'flat_fee' %} · {{ p.flat_fee|money }}{% endif %}{% if p.due_date %} · due {{ p.due_date|nicedate }}{% endif %}</div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-light js-project" data-project="{{ p|json_encode }}"><i data-feather="edit-2"></i> Edit</button>
+        <button class="btn btn-light js-entry" data-preset='{"project_id": {{ p.id }}}'><i data-feather="clock"></i> Log time</button>
+        <button class="btn btn-light js-start" data-project="{{ p.id }}"><i data-feather="play"></i> Start timer</button>
+        <a href="/time/invoice-new?client={{ p.client_id }}" class="btn btn-primary"><i data-feather="file-plus"></i> Invoice</a>
+    </div>
+</div>
+
+<div class="card card-flush">
+    <div class="stat-strip">
+        <div><div class="l">Hours</div><div class="v">{{ p.hours|number_format(2) }}{% if p.budget_hours %}<span class="text-muted fs-6"> / {{ p.budget_hours }}</span>{% endif %}</div></div>
+        <div><div class="l">Unbilled hours</div><div class="v">{{ p.unbilled_seconds|hours }}</div></div>
+        <div><div class="l">{{ p.billing == 'flat_fee' ? 'Fee' : 'Billable value' }}</div><div class="v">{{ p.value|money }}</div></div>
+        <div><div class="l">Unbilled</div><div class="v text-primary">{{ p.unbilled|money }}</div></div>
+        {% if p.billing == 'flat_fee' %}<div><div class="l">Effective rate</div><div class="v">{{ p.effective_rate ? p.effective_rate|money ~ '/h' : '—' }}</div></div>{% endif %}
+        {% if p.budget_pct is not null %}<div><div class="l">Budget used</div><div class="v {{ p.budget_pct > 100 ? 'text-danger' }}">{{ p.budget_pct }}%</div><div class="bar mt-1 {{ p.budget_pct > 100 ? 'over' : (p.budget_pct > 80 ? 'warn' : 'ok') }}"><span style="width:{{ min(100, p.budget_pct) }}%"></span></div></div>{% endif %}
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header"><h5 class="card-title">Hours per week</h5></div>
+            <div class="card-body pt-2"><div id="wkChart" style="height:200px"></div></div>
+        </div>
+        <div class="card card-flush">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">Time entries</h5><a href="/time/reports?project={{ p.id }}&range=all&group=day" class="ms-auto small">Report</a></div>
+            <div class="table-responsive"><table class="table table-hover mb-0">
+                <thead><tr><th>Date</th><th>Notes</th><th class="d-none d-md-table-cell">Service</th><th class="text-end">Hours</th><th class="text-end">Value</th><th></th></tr></thead>
+                <tbody>
+                {% for e in data.entries %}
+                    <tr class="cursor-pointer js-entry" data-id="{{ e.id }}">
+                        <td class="small text-nowrap">{{ e.date|nicedate('M j') }}</td>
+                        <td>{{ e.notes ?: '—' }}{% if data.by_user|length > 1 %}<div class="small-muted">{{ e.user_name }}</div>{% endif %}</td>
+                        <td class="d-none d-md-table-cell small">{{ e.service_name }}</td>
+                        <td class="text-end dur">{{ e.seconds|hm }}</td>
+                        <td class="text-end money small">{{ e.value > 0 ? e.value|money }}</td>
+                        <td>{% if e.invoice_number %}<span class="chip chip-green">{{ e.invoice_number }}</span>{% elseif e.running %}<span class="chip chip-green">running</span>{% endif %}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6"><div class="empty">No time yet.</div></td></tr>
+                {% endfor %}
+                </tbody>
+            </table></div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card card-flush">
+            <div class="card-header"><h5 class="card-title">By service</h5></div>
+            {% for g in data.by_service %}
+                <div class="list-row"><div class="grow"><div class="title">{{ g.name }}</div><div class="bar mt-1"><span style="width:{{ p.seconds ? (g.seconds / p.seconds * 100)|round : 0 }}%"></span></div></div><div class="text-end"><div class="dur">{{ g.seconds|hm }}</div><div class="small-muted money">{{ g.value|money }}</div></div></div>
+            {% else %}<div class="empty py-3">—</div>{% endfor %}
+        </div>
+        {% if data.by_user|length > 1 %}
+        <div class="card card-flush">
+            <div class="card-header"><h5 class="card-title">By person</h5></div>
+            {% for g in data.by_user %}<div class="list-row"><div class="grow">{{ g.name }}</div><div class="dur">{{ g.seconds|hm }}</div></div>{% endfor %}
+        </div>
+        {% endif %}
+        <div class="card card-flush">
+            <div class="card-header"><h5 class="card-title">Invoices</h5></div>
+            {% for i in data.invoices %}<a href="/time/invoice/{{ i.id }}" class="list-row text-decoration-none"><div class="grow">{{ i.number }} <span class="small-muted">{{ i.issue_date|nicedate('M j') }}</span></div><span class="chip status-{{ i.status }}">{{ i.status }}</span><span class="money">{{ i.total|money }}</span></a>{% else %}<div class="empty py-3">Not invoiced yet.</div>{% endfor %}
+        </div>
+        {% if data.expenses %}
+        <div class="card card-flush">
+            <div class="card-header"><h5 class="card-title">Expenses</h5></div>
+            {% for x in data.expenses %}<div class="list-row"><div class="grow"><div class="title">{{ x.payee }}</div><div class="meta">{{ x.date|nicedate('M j') }}{% if x.billable %} · {{ x.invoice_id ? 'billed' : 'billable' }}{% endif %}</div></div><span class="money">{{ x.amount|abs|money }}</span></div>{% endfor %}
+        </div>
+        {% endif %}
+        {% if p.description %}<div class="card"><div class="card-body small" style="white-space:pre-wrap">{{ p.description }}</div></div>{% endif %}
+    </div>
+</div>
+{% include 'partials/project-modal.html' %}
+{% include 'partials/time-modal.html' %}
+{% endblock %}
+{% block scripts %}
+<script>
+const wk = {{ data.weekly|js }};
+chart('#wkChart', {
+    chart: { type: 'bar', height: 200 },
+    series: [{ name: 'Hours', data: wk.map(w => Math.round(w.s / 36) / 100) }],
+    colors: [{{ (p.color ?: p.client_color ?: '#2a78d6')|js }}],
+    plotOptions: { bar: { columnWidth: '55%', borderRadius: 3, borderRadiusApplication: 'end' } },
+    xaxis: { categories: wk.map(w => new Date(w.d + 'T12:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) },
+    yaxis: { labels: { formatter: v => v.toFixed(0) + 'h' } },
+    tooltip: { y: { formatter: v => v.toFixed(2) + ' h' } },
+    noData: { text: 'No time in the last 16 weeks' },
+});
+$('.js-start').on('click', function () { api('/app/Ajax/time.php', { action: 'start', project_id: $(this).data('project') }).then(() => location = '/time'); });
+</script>
+{% endblock %}

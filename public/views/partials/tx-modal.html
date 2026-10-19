@@ -1,0 +1,98 @@
+{# Add / edit a transaction. Needs data.accounts, data.categories, data.clients, data.projects #}
+<div class="modal fade" id="txModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" id="txForm" enctype="multipart/form-data" autocomplete="off">
+            <div class="modal-header">
+                <div class="seg" id="txKind">
+                    <input type="radio" name="kind" value="expense" id="k-exp" checked><label for="k-exp">Expense</label>
+                    <input type="radio" name="kind" value="income" id="k-inc"><label for="k-inc">Income</label>
+                    <input type="radio" name="kind" value="transfer" id="k-tr"><label for="k-tr">Transfer</label>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="action" value="save"><input type="hidden" name="id">
+                <div class="row g-2 mb-2">
+                    <div class="col-5"><label class="form-label">Amount</label><input name="amount" class="form-control form-control-lg input-money" inputmode="decimal" placeholder="0.00" required></div>
+                    <div class="col-7"><label class="form-label">Date</label><input type="date" name="date" class="form-control form-control-lg" value="{{ base.today }}"></div>
+                </div>
+                <div class="mb-2 not-transfer"><label class="form-label">Payee</label><input name="payee" class="form-control js-payee" list="payeeList" placeholder="Who was it?"></div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6"><label class="form-label js-acct-label">Account</label>
+                        <select name="account_id" class="form-select" required>{% for a in data.accounts %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select></div>
+                    <div class="col-6 only-transfer hidden"><label class="form-label">To account</label>
+                        <select name="to_account_id" class="form-select">{% for a in data.accounts %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select></div>
+                    <div class="col-6 not-transfer"><label class="form-label">Category</label>
+                        <select name="category_id" class="form-select js-category">
+                            <option value="">Uncategorized</option>
+                            <optgroup label="Spending" class="cat-expense">{% for c in data.categories|filter(c => c.kind == 'expense') %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}</optgroup>
+                            <optgroup label="Income" class="cat-income">{% for c in data.categories|filter(c => c.kind == 'income') %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}</optgroup>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-2"><label class="form-label">Memo</label><input name="memo" class="form-control"></div>
+                <div class="row g-2 mb-2 not-transfer">
+                    <div class="col-6"><label class="form-label">Client</label>
+                        <select name="client_id" class="form-select"><option value="">—</option>{% for c in data.clients %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
+                    <div class="col-6"><label class="form-label">Project</label>
+                        <select name="project_id" class="form-select"><option value="">—</option>{% for client, ps in data.projects %}<optgroup label="{{ client }}">{% for p in ps %}<option value="{{ p.id }}" data-client="{{ p.client_id }}">{{ p.name }}</option>{% endfor %}</optgroup>{% endfor %}</select></div>
+                    <div class="col-12 only-expense"><label class="form-check"><input type="checkbox" name="billable" value="1" class="form-check-input"> <span class="form-check-label">Billable: add to the client's next invoice</span></label></div>
+                </div>
+                <div class="mb-2"><label class="form-label">Tags</label><input name="tags" class="form-control" placeholder="comma, separated"></div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <label class="btn btn-light btn-sm mb-0"><i data-feather="paperclip"></i> Receipt <input type="file" name="receipt" accept="image/*,application/pdf" class="d-none"></label>
+                    <span class="small-muted js-file-name"></span>
+                    <a href="#" target="_blank" class="small js-receipt-link hidden">View receipt</a>
+                    <label class="form-check ms-auto mb-0 not-transfer"><input type="checkbox" name="make_rule" value="1" class="form-check-input"> <span class="form-check-label small">Always use this category for this payee</span></label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger me-auto js-tx-delete hidden">Delete</button>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const M = '/app/Ajax/money.php', f = document.getElementById('txForm');
+    function kind() {
+        const k = $('#txForm [name=kind]:checked').val();
+        $('#txForm .not-transfer').toggleClass('hidden', k === 'transfer');
+        $('#txForm .only-transfer').toggleClass('hidden', k !== 'transfer');
+        $('#txForm .only-expense').toggleClass('hidden', k !== 'expense');
+        $('#txForm .js-acct-label').text(k === 'transfer' ? 'From account' : 'Account');
+        $('#txForm .cat-expense').prop('disabled', k === 'income');
+        $('#txForm .cat-income').prop('disabled', k === 'expense');
+    }
+    $('#txForm [name=kind]').on('change', kind);
+    $('#txForm [name=project_id]').on('change', function () { const c = $(this).find(':selected').data('client'); if (c) f.client_id.value = c; });
+    window.openTx = function (id, preset) {
+        f.reset(); f.id.value = '';
+        $('.js-tx-delete').toggleClass('hidden', !id);
+        $('.js-receipt-link').addClass('hidden'); $('#txForm .js-file-name').text('');
+        if (preset) Object.entries(preset).forEach(([k, v]) => { if (f[k] && f[k].type !== 'radio') f[k].value = v; else if (k === 'kind') $('#txForm [name=kind][value=' + v + ']').prop('checked', true); });
+        const show = () => { kind(); bootstrap.Modal.getOrCreateInstance(document.getElementById('txModal')).show(); setTimeout(() => f.amount.focus(), 250); };
+        if (!id) { show(); return; }
+        api(M, { action: 'get', id }).then(r => {
+            const t = r.tx;
+            $('#txForm [name=kind][value=' + t.kind + ']').prop('checked', true);
+            ['id', 'date', 'payee', 'memo', 'account_id', 'to_account_id', 'category_id', 'client_id', 'project_id', 'tags'].forEach(k => { if (f[k]) f[k].value = t[k] == null ? '' : t[k]; });
+            f.amount.value = t.amount_abs;
+            f.billable.checked = t.billable == 1;
+            if (t.receipt) $('.js-receipt-link').attr('href', '/money/receipt/' + t.receipt).removeClass('hidden');
+            show();
+        });
+    };
+    $(document).on('click', '.js-tx', function (e) { e.preventDefault(); openTx($(this).data('id') || null, $(this).data('preset') || null); });
+    $('#txForm').on('submit', function (e) {
+        e.preventDefault();
+        api(M, new FormData(this)).then(r => { ShowAlert(r.message, 'success'); setTimeout(() => location.reload(), 300); });
+    });
+    $('.js-tx-delete').on('click', function () {
+        if (!confirm('Delete this transaction?')) return;
+        api(M, { action: 'delete', id: f.id.value }).then(() => location.reload());
+    });
+});
+</script>

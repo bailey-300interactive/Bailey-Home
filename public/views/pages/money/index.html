@@ -1,0 +1,145 @@
+{% extends "bases/base-admin.html" %}
+{% set b = data.budget %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Money</h1><div class="sub">{{ data.month_label }} · day {{ b.day }} of {{ b.days }}</div></div>
+    <div class="actions">
+        <div class="btn-group"><a class="btn btn-light" href="?month={{ data.prev_month }}">‹</a><a class="btn btn-light" href="/money">This month</a><a class="btn btn-light" href="?month={{ data.next_month }}">›</a></div>
+        <a href="/money/import" class="btn btn-light"><i data-feather="upload"></i> Import</a>
+        <button class="btn btn-primary js-tx" data-preset='{"kind":"expense"}'><i data-feather="plus"></i> Transaction</button>
+    </div>
+</div>
+
+{% if data.accounts is empty %}
+    <div class="card"><div class="card-body text-center py-5">
+        <div style="font-size:2.5rem">💳</div>
+        <h4 class="mt-2">Start by adding an account</h4>
+        <p class="text-muted">A checking account, a credit card, or just "Cash". Then add spending as it happens, or import a CSV from your bank.</p>
+        <a href="/money/accounts?new=1" class="btn btn-primary">Add an account</a>
+    </div></div>
+{% else %}
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-xl-3"><div class="card kpi mb-0"><div class="label">Spent this month</div><div class="value money">{{ b.spent|money }}</div>
+        <div class="foot">{% if b.budget > 0 %}of {{ b.budget|money }} budget · {{ (b.spent / b.budget * 100)|round }}%{% else %}<a href="/money/budgets">Set budgets</a>{% endif %}</div><div class="icon tint-red"><i data-feather="arrow-up-right"></i></div></div></div>
+    <div class="col-6 col-xl-3"><div class="card kpi mb-0"><div class="label">Income this month</div><div class="value money">{{ b.income|money }}</div>
+        <div class="foot">Net {{ (b.income - b.spent)|money(null, true) }}</div><div class="icon tint-green"><i data-feather="arrow-down-left"></i></div></div></div>
+    <div class="col-6 col-xl-3"><div class="card kpi mb-0"><a href="/money/accounts" class="stretched-link"></a><div class="label">Net worth</div><div class="value money">{{ data.net.net|money }}</div>
+        <div class="foot">{{ data.net.assets|money }} assets · {{ data.net.debts|abs|money }} owed</div><div class="icon tint-blue"><i data-feather="trending-up"></i></div></div></div>
+    <div class="col-6 col-xl-3"><div class="card kpi mb-0"><a href="/money/bills" class="stretched-link"></a><div class="label">Bills next 3 weeks</div><div class="value money">{{ data.bills|reduce((s, x) => s + x.amount, 0)|money }}</div>
+        <div class="foot">{{ data.bills|length }} due{% if data.bills|filter(x => x.days < 0)|length %} · <span class="text-danger">{{ data.bills|filter(x => x.days < 0)|length }} late</span>{% endif %}</div><div class="icon tint-amber"><i data-feather="calendar"></i></div></div></div>
+</div>
+
+{% if data.uncategorized %}
+    <div class="alert alert-info d-flex align-items-center gap-2 p-3" style="border-radius:12px"><i data-feather="tag"></i> {{ data.uncategorized }} transaction{{ data.uncategorized > 1 ? 's' }} without a category. <a href="/money/transactions?category=none" class="ms-auto fw-600">Sort them</a></div>
+{% endif %}
+
+<div class="row">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">Spending this month vs last month</h5><span class="small-muted ms-auto">running total</span></div>
+            <div class="card-body pt-2"><div id="paceChart" style="height:260px"></div></div>
+        </div>
+        <div class="card">
+            <div class="card-header"><h5 class="card-title">Income & spending, last 6 months</h5></div>
+            <div class="card-body pt-2"><div id="monthlyChart" style="height:260px"></div></div>
+        </div>
+        <div class="card card-flush">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">Recent</h5><a href="/money/transactions" class="ms-auto small">All transactions</a></div>
+            {% for t in data.recent %}
+                <div class="list-row cursor-pointer js-tx" data-id="{{ t.id }}">
+                    <span class="emoji-badge">{{ t.kind == 'transfer' ? '🔁' : (t.category_icon ?: (t.amount > 0 ? '💵' : '🏷️')) }}</span>
+                    <div class="grow"><div class="title truncate">{{ t.payee ?: '—' }}</div><div class="meta"><span>{{ t.date|relday }}</span><span>{{ t.account_name }}</span>{% if t.category_name %}<span>{{ t.category_name }}</span>{% endif %}{% if t.receipt %}<i data-feather="paperclip" style="width:12px;height:12px"></i>{% endif %}</div></div>
+                    <span class="money fw-600 {{ t.amount > 0 ? 'pos' }}">{{ t.amount|money(null, true) }}</span>
+                </div>
+            {% else %}
+                <div class="empty">No transactions yet.</div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">Where it went</h5><a href="/money/reports" class="ms-auto small">Reports</a></div>
+            <div class="card-body pt-2">
+                {% if data.by_category %}
+                    <div id="catChart" style="height:230px"></div>
+                    {% for c in data.by_category|slice(0, 6) %}
+                        <div class="d-flex align-items-center gap-2 py-1 small">
+                            <span class="color-dot" style="background:{{ c.color }}"></span><span>{{ c.icon }} {{ c.name }}</span>
+                            <span class="ms-auto money fw-600">{{ c.total|money }}</span>
+                        </div>
+                    {% endfor %}
+                {% else %}<div class="empty py-4">No spending this month yet.</div>{% endif %}
+            </div>
+        </div>
+        <div class="card card-flush">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">Budgets</h5><a href="/money/budgets?month={{ data.month }}" class="ms-auto small">All</a></div>
+            {% set budgeted = b.categories|filter(c => c.budget is not null and c.budget > 0)|sort((a, z) => (z.spent / z.budget) <=> (a.spent / a.budget))|slice(0, 5) %}
+            {% for c in budgeted %}
+                <div class="budget-row">
+                    <div class="top"><span>{{ c.icon }}</span><span class="fw-600">{{ c.name }}</span><span class="ms-auto small {{ c.status == 'over' ? 'text-danger fw-600' : 'text-muted' }}">{{ c.spent|money }} / {{ c.budget|money }}</span></div>
+                    <div class="bar {{ c.status }}"><span style="width:{{ c.pct }}%"></span>{% if c.pace and b.pct_of_month < 100 %}<i class="pace" style="left:{{ b.pct_of_month }}%"></i>{% endif %}</div>
+                </div>
+            {% else %}
+                <div class="empty py-4"><a href="/money/budgets">Set monthly budgets</a> to see them here.</div>
+            {% endfor %}
+        </div>
+        <div class="card card-flush">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">Coming up</h5><a href="/money/bills" class="ms-auto small">Bills</a></div>
+            {% for bill in data.bills %}
+                <div class="list-row">
+                    <div class="bill-day {{ bill.days < 0 ? 'late' : (bill.days <= 3 ? 'soon') }}"><div class="m">{{ bill.next_due|date('M') }}</div><div class="d">{{ bill.next_due|date('j') }}</div></div>
+                    <div class="grow"><div class="title truncate">{{ bill.name }}</div><div class="meta">{{ bill.days < 0 ? (bill.days|abs) ~ (bill.days == -1 ? ' day late' : ' days late') : bill.next_due|relday }}{% if bill.autopay %} · autopay{% endif %}</div></div>
+                    <span class="money fw-600">{{ bill.amount|money }}</span>
+                </div>
+            {% else %}
+                <div class="empty py-4">No bills in the next 3 weeks.</div>
+            {% endfor %}
+        </div>
+        {% if data.unbilled_expenses > 0 %}
+            <div class="card"><div class="card-body d-flex align-items-center gap-2"><span class="emoji-badge tint-purple">🧾</span><div class="grow"><div class="fw-600">{{ data.unbilled_expenses|money }} billable expenses</div><div class="small-muted">not on an invoice yet</div></div><a href="/money/transactions?billable=unbilled" class="btn btn-light btn-sm">See</a></div></div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% include 'partials/tx-modal.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const pace = {{ data.pace|js }};
+const days = Array.from({ length: 31 }, (_, i) => i + 1);
+chart('#paceChart', {
+    chart: { type: 'area', height: 260 },
+    series: [{ name: 'This month', data: pace.this }, { name: 'Last month', data: pace.last }],
+    colors: [SERIES[0], '#adb5bd'],
+    stroke: { width: [2.5, 2], dashArray: [0, 5] },
+    fill: { type: 'gradient', gradient: { opacityFrom: [0.22, 0], opacityTo: [0.02, 0] } },
+    xaxis: { categories: days, tickAmount: 10, labels: { formatter: v => v }, tooltip: { enabled: false } },
+    yaxis: { labels: { formatter: moneyShort } },
+    tooltip: { x: { formatter: (v) => 'Day ' + v }, y: { formatter: v => fmtMoney(v) }, shared: true },
+});
+const m = {{ data.monthly|js }};
+chart('#monthlyChart', {
+    chart: { type: 'bar', height: 260 },
+    series: [{ name: 'Income', data: m.income }, { name: 'Spending', data: m.expense }],
+    colors: [SERIES[2], SERIES[1]],
+    plotOptions: { bar: { columnWidth: '55%', borderRadius: 4, borderRadiusApplication: 'end' } },
+    stroke: { show: true, width: 2, colors: ['transparent'] },
+    xaxis: { categories: m.labels },
+    yaxis: { labels: { formatter: moneyShort } },
+    tooltip: { y: { formatter: v => fmtMoney(v) }, shared: true, intersect: false },
+});
+const cats = {{ data.by_category|slice(0, 8)|js }};
+chart('#catChart', {
+    chart: { type: 'donut', height: 230 },
+    series: cats.map(c => Math.round(c.total * 100) / 100),
+    labels: cats.map(c => c.name),
+    colors: cats.map(c => c.color),
+    legend: { show: false },
+    stroke: { width: 2, colors: ['#fff'] },
+    plotOptions: { pie: { donut: { size: '68%', labels: { show: true, total: { show: true, label: 'Spent', formatter: w => fmtMoney(w.globals.seriesTotals.reduce((a, b) => a + b, 0)) }, value: { formatter: v => fmtMoney(v) } } } } },
+    tooltip: { y: { formatter: v => fmtMoney(v) } },
+});
+</script>
+{% endblock %}

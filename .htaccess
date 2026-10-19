@@ -1,0 +1,55 @@
+Options -Indexes
+DirectoryIndex disabled
+RewriteEngine on
+RewriteBase /
+
+# Already rewritten to the router by a rule below: stop here
+RewriteCond %{ENV:REDIRECT_STATUS} =200
+RewriteRule ^ - [L]
+
+# ---- Never serve private folders or files (answer 404) ----
+RewriteRule ^\.well-known/ - [L]
+RewriteRule (^|/)\. - [R=404,L]
+RewriteRule ^app/Ajax/[a-z0-9-]+\.php$ - [L,NC]
+RewriteRule ^(app|storage|settings|dev|docs|routes|public/views|public/mail)(/|$) - [R=404,L]
+RewriteRule ^(configuration\.php|readme\.md|README\.md)$ - [R=404,L,NC]
+RewriteRule \.(sql|md|log|ini|bak|old|swp|json|lock|yml|yaml|zip|tar|gz|sample|dist)$ - [R=404,L,NC]
+RewriteRule (^|/)error_log$ - [R=404,L]
+
+# ---- Pages: everything goes through the router ----
+RewriteRule ^$ routes/web.php?p=index [L,QSA]
+RewriteRule ^index(\.php)?$ routes/web.php?p=index [L,QSA]
+RewriteRule ^logout$ logout.php [L,NC]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^([^/]+)/([^/]+)/([^/]+)/?$ routes/web.php?p=$1&p1=$2&p2=$3 [L,QSA]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^([^/]+)/([^/]+)/?$ routes/web.php?p=$1&p1=$2 [L,QSA]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^([^/]+)/?$ routes/web.php?p=$1 [L,QSA]
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "same-origin"
+</IfModule>
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType image/png "access plus 1 month"
+</IfModule>
+
+# Receipt uploads
+<IfModule mod_php.c>
+    php_value upload_max_filesize 20M
+    php_value post_max_size 25M
+</IfModule>
+
+AddType application/manifest+json .webmanifest

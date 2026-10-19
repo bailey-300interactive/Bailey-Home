@@ -1,0 +1,12 @@
+<?php return; ?>
+
+[MAIL]
+; Driver = smtp sends for real. Driver = log writes each email to storage/logs/mail-YYYY-MM-DD.txt (for testing)
+Driver = smtp
+Host = 'smtp.gmail.com'
+Port = 587
+SmtpSecure = 'tls'
+Username = 'you@300interactive.com'
+Password = 'app-password-here'
+FromEmail = 'home@300interactive.com'
+FromName = 'Home'

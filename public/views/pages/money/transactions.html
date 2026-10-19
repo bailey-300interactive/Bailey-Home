@@ -1,0 +1,96 @@
+{% extends "bases/base-admin.html" %}
+{% set f = data.f %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Transactions</h1><div class="sub">{{ data.count }} found · in <span class="money pos">{{ data.sums.money_in|money }}</span> · out <span class="money neg">{{ data.sums.money_out|abs|money }}</span></div></div>
+    <div class="actions">
+        <a href="{{ query({export: 1}) }}" class="btn btn-light"><i data-feather="download"></i> CSV</a>
+        <a href="/money/import" class="btn btn-light"><i data-feather="upload"></i> Import</a>
+        <button class="btn btn-primary js-tx" data-preset='{"kind":"expense"}'><i data-feather="plus"></i> Transaction</button>
+    </div>
+</div>
+
+<form class="filters mb-3 js-autosubmit" method="get">
+    <input type="search" name="q" value="{{ f.q }}" class="form-control" placeholder="Search payee, memo, amount" style="min-width:220px">
+    <select name="account" class="form-select"><option value="">All accounts</option>{% for a in data.accounts %}<option value="{{ a.id }}" {{ f.account == a.id ? 'selected' }}>{{ a.name }}</option>{% endfor %}</select>
+    <select name="category" class="form-select"><option value="">All categories</option><option value="none" {{ f.category == 'none' ? 'selected' }}>⚠️ Uncategorized ({{ data.uncategorized }})</option>{% for c in data.categories %}<option value="{{ c.id }}" {{ f.category == c.id ? 'selected' }}>{{ c.icon }} {{ c.name }}</option>{% endfor %}</select>
+    <select name="kind" class="form-select"><option value="">Any type</option><option value="expense" {{ f.kind == 'expense' ? 'selected' }}>Expenses</option><option value="income" {{ f.kind == 'income' ? 'selected' }}>Income</option><option value="transfer" {{ f.kind == 'transfer' ? 'selected' }}>Transfers</option></select>
+    <select name="client" class="form-select"><option value="">Any client</option>{% for c in data.clients %}<option value="{{ c.id }}" {{ f.client == c.id ? 'selected' }}>{{ c.name }}</option>{% endfor %}</select>
+    <select name="billable" class="form-select"><option value="">Billable or not</option><option value="1" {{ f.billable == '1' ? 'selected' }}>Billable</option><option value="unbilled" {{ f.billable == 'unbilled' ? 'selected' }}>Billable, not invoiced</option></select>
+    <input type="month" name="month" value="{{ f.month }}" class="form-control" title="Month">
+    {% if f|filter(v => v)|length %}<a href="/money/transactions" class="btn btn-link btn-sm">Clear</a>{% endif %}
+</form>
+
+<form method="post" id="bulkForm">
+    {{ csrf_field() }}<input type="hidden" name="action" value="tx-bulk">
+    <div class="card card-flush">
+        <div class="d-flex align-items-center gap-2 p-2 border-bottom hidden" id="bulkBar">
+            <span class="small fw-600 ms-2"><span id="bulkN">0</span> selected</span>
+            <select name="category_id" class="form-select form-select-sm w-auto"><option value="">Set category…</option>{% for c in data.categories %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}</select>
+            <button name="bulk" value="category" class="btn btn-sm btn-light">Apply</button>
+            <button name="bulk" value="delete" class="btn btn-sm btn-outline-danger ms-auto" data-confirm="Delete the selected transactions?">Delete</button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead><tr><th style="width:30px"><input type="checkbox" class="form-check-input" id="checkAll"></th><th>Date</th><th>Payee</th><th>Category</th><th class="d-none d-md-table-cell">Account</th><th class="text-end">Amount</th></tr></thead>
+                <tbody>
+                {% for t in data.list %}
+                    <tr class="cursor-pointer" data-id="{{ t.id }}">
+                        <td><input type="checkbox" name="ids[]" value="{{ t.id }}" class="form-check-input js-row-check"></td>
+                        <td class="text-nowrap small">{{ t.date|nicedate('M j') }}</td>
+                        <td class="js-open">
+                            <div class="fw-500">{{ t.payee ?: '—' }} {% if t.receipt %}<i data-feather="paperclip" style="width:13px;height:13px" class="text-muted"></i>{% endif %}</div>
+                            <div class="small-muted">
+                                {{ t.memo }}
+                                {% if t.client_name %}<span class="chip chip-purple">{{ t.client_name }}{{ t.project_name ? ' · ' ~ t.project_name }}</span>{% endif %}
+                                {% if t.billable %}<span class="chip {{ t.invoice_number ? 'chip-green' : 'chip-amber' }}">{{ t.invoice_number ? 'Billed ' ~ t.invoice_number : 'Billable' }}</span>{% endif %}
+                                {% for tag in (t.tags ?: '')|split(',')|filter(x => x) %}<a href="?tag={{ tag }}" class="chip">#{{ tag }}</a>{% endfor %}
+                            </div>
+                        </td>
+                        <td>
+                            {% if t.kind == 'transfer' %}<span class="chip">🔁 Transfer</span>
+                            {% else %}
+                                <select class="form-select form-select-sm js-cat {{ t.category_id ? '' : 'border-warning' }}" style="max-width:190px">
+                                    <option value="">Uncategorized</option>
+                                    {% for c in data.categories %}<option value="{{ c.id }}" {{ c.id == t.category_id ? 'selected' }}>{{ c.icon }} {{ c.name }}</option>{% endfor %}
+                                </select>
+                            {% endif %}
+                        </td>
+                        <td class="d-none d-md-table-cell small"><span class="color-dot me-1" style="background:{{ t.account_color }}"></span>{{ t.account_name }}</td>
+                        <td class="text-end money fw-600 {{ t.amount > 0 ? 'pos' }}">{{ t.amount|money(null, true) }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6"><div class="empty">No transactions match.</div></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</form>
+{% if data.pages > 1 %}
+    <nav class="d-flex justify-content-center"><ul class="pagination">
+        {% for pg in 1..data.pages %}{% if pg <= 3 or pg > data.pages - 2 or (pg - data.page)|abs <= 2 %}<li class="page-item {{ pg == data.page ? 'active' }}"><a class="page-link" href="{{ query({page: pg}) }}">{{ pg }}</a></li>{% endif %}{% endfor %}
+    </ul></nav>
+{% endif %}
+{% include 'partials/tx-modal.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).on('click', '.js-open, tr[data-id] td.small', function () { openTx($(this).closest('tr').data('id')); });
+$(document).on('change', '.js-cat', function () {
+    const tr = $(this).closest('tr'), sel = this;
+    const payee = tr.find('.js-open .fw-500').text().trim();
+    api('/app/Ajax/money.php', { action: 'categorize', id: tr.data('id'), category_id: sel.value, all_from_payee: 0 }).then(() => {
+        $(sel).removeClass('border-warning');
+        const others = $('tr[data-id]').filter(function () { return $(this).find('.js-open .fw-500').text().trim() === payee && !$(this).find('.js-cat').val() && this !== tr[0]; });
+        if (sel.value && others.length && confirm('Also put the other ' + others.length + ' "' + payee + '" transactions in this category, and do it automatically from now on?')) {
+            api('/app/Ajax/money.php', { action: 'categorize', id: tr.data('id'), category_id: sel.value, all_from_payee: 1 }).then(r => { ShowAlert('Updated ' + r.also + ' more and made a rule', 'success'); others.find('.js-cat').val(sel.value).removeClass('border-warning'); });
+        } else ShowAlert('Saved', 'success', null, null, 1200);
+    });
+});
+function bulk() { const n = $('.js-row-check:checked').length; $('#bulkN').text(n); $('#bulkBar').toggleClass('hidden', !n); }
+$('#checkAll').on('change', function () { $('.js-row-check').prop('checked', this.checked); bulk(); });
+$(document).on('change', '.js-row-check', bulk);
+</script>
+{% endblock %}

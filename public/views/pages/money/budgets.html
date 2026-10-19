@@ -1,0 +1,41 @@
+{% extends "bases/base-admin.html" %}
+{% set b = data.b %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Budgets</h1><div class="sub">{{ data.month_label }} · {{ b.pct_of_month }}% of the month gone</div></div>
+    <div class="actions">
+        <div class="btn-group"><a class="btn btn-light" href="?month={{ data.prev_month }}">‹</a><a class="btn btn-light" href="/money/budgets">This month</a><a class="btn btn-light" href="?month={{ data.next_month }}">›</a></div>
+        <form method="post" data-confirm="Fill empty budgets with your average spending over the last 3 months?">{{ csrf_field() }}<input type="hidden" name="action" value="budget-suggest"><button class="btn btn-light"><i data-feather="zap"></i> Suggest budgets</button></form>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4"><div class="card kpi mb-0"><div class="label">Budgeted</div><div class="value money">{{ b.budget|money }}</div><div class="foot">across {{ b.categories|filter(c => c.budget)|length }} categories</div></div></div>
+    <div class="col-md-4"><div class="card kpi mb-0"><div class="label">Spent</div><div class="value money">{{ b.spent|money }}</div><div class="foot">{{ b.budget > 0 ? (b.spent / b.budget * 100)|round ~ '% of budget' : '' }}{% if b.uncategorized > 0 %} · {{ b.uncategorized|money }} uncategorized{% endif %}</div></div></div>
+    <div class="col-md-4"><div class="card kpi mb-0"><div class="label">{{ b.budget - b.spent >= 0 ? 'Left to spend' : 'Over budget' }}</div><div class="value money {{ b.budget - b.spent < 0 ? 'neg' }}">{{ (b.budget - b.spent)|abs|money }}</div>
+        <div class="foot">{% if b.day and b.days > b.day and b.budget > b.spent %}{{ ((b.budget - b.spent) / (b.days - b.day + 1))|money }} a day for the rest of the month{% endif %}</div></div></div>
+</div>
+
+<form method="post">
+    {{ csrf_field() }}<input type="hidden" name="action" value="budget-save">
+    <div class="card card-flush">
+        <div class="card-header d-flex align-items-center"><h5 class="card-title">Monthly budget per category</h5><span class="small-muted ms-auto d-none d-md-inline">The thin line shows where you'd be if you spent evenly.</span></div>
+        {% for c in b.categories %}
+            <div class="budget-row">
+                <div class="top">
+                    <span class="emoji-badge" style="width:32px;height:32px">{{ c.icon }}</span>
+                    <div class="grow">
+                        <a href="/money/transactions?category={{ c.id }}&month={{ data.month }}" class="fw-600 text-reset text-decoration-none">{{ c.name }}</a>
+                        <div class="small-muted">{{ c.spent|money }} spent{% if c.avg > 0 %} · usually {{ c.avg|money }}{% endif %}{% if c.left is not null %} · <span class="{{ c.left < 0 ? 'text-danger fw-600' }}">{{ c.left < 0 ? (c.left|abs|money) ~ ' over' : (c.left|money) ~ ' left' }}</span>{% endif %}</div>
+                    </div>
+                    <div class="input-group input-group-sm" style="width:130px"><span class="input-group-text">$</span><input name="budget[{{ c.id }}]" value="{{ c.budget is not null ? c.budget|number_format(0, '.', '') }}" class="form-control budget-input" placeholder="—" inputmode="decimal"></div>
+                </div>
+                {% if c.budget %}
+                    <div class="bar {{ c.status }}"><span style="width:{{ c.pct }}%"></span>{% if b.pct_of_month > 0 and b.pct_of_month < 100 %}<i class="pace" style="left:{{ b.pct_of_month }}%"></i>{% endif %}</div>
+                {% endif %}
+            </div>
+        {% endfor %}
+        <div class="card-footer text-end"><button class="btn btn-primary">Save budgets</button></div>
+    </div>
+</form>
+{% endblock %}

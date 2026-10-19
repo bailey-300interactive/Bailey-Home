@@ -1,0 +1,61 @@
+{% extends "bases/base-admin.html" %}
+{% set h = data.health %}
+{% macro rows(items, note) %}
+    {% for it in items %}
+        <a href="/vault?item={{ it.id }}" class="list-row text-decoration-none">
+            <span class="emoji-badge">{{ it.d.name|first|upper }}</span>
+            <div class="grow"><div class="title truncate">{{ it.d.name }}</div><div class="meta">{{ it.d.username }}{% if it.d.url %} · {{ it.d.url|domain }}{% endif %}</div></div>
+            {% if note == 'strength' %}<span class="chip chip-red">{{ ['Very weak', 'Weak', 'Fair', 'Strong', 'Very strong'][it.strength] }}</span>{% endif %}
+            {% if note == 'reused' %}<span class="chip chip-amber">Same as {{ it.reused_count - 1 }} other{{ it.reused_count > 2 ? 's' }}</span>{% endif %}
+            {% if note == 'old' %}<span class="chip">Changed {{ it.password_changed_at|local('M Y') }}</span>{% endif %}
+            <i data-feather="chevron-right" class="text-muted"></i>
+        </a>
+    {% else %}
+        <div class="empty py-4"><div class="big">✅</div>Nothing here. Nice.</div>
+    {% endfor %}
+{% endmacro %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Password health</h1><div class="sub">Checked in your browser session from your unlocked vault. Nothing is sent anywhere.</div></div>
+    <div class="actions"><a href="/vault/generator" class="btn btn-light"><i data-feather="refresh-cw"></i> Generator</a></div>
+</div>
+
+<div class="row">
+    <div class="col-lg-4">
+        <div class="card text-center">
+            <div class="card-body py-4">
+                {% set color = h.score >= 80 ? '#1cbb8c' : (h.score >= 55 ? '#f5a623' : '#f0506e') %}
+                <svg class="score-ring" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="52" fill="none" stroke="var(--home-border)" stroke-width="12"/>
+                    <circle cx="60" cy="60" r="52" fill="none" stroke="{{ color }}" stroke-width="12" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="{{ 326.7 * (1 - h.score / 100) }}" transform="rotate(-90 60 60)"/>
+                    <text x="60" y="58" text-anchor="middle" font-size="30" font-weight="700" fill="currentColor">{{ h.score }}</text>
+                    <text x="60" y="78" text-anchor="middle" font-size="11" fill="#8a939c">out of 100</text>
+                </svg>
+                <h5 class="mt-3 mb-1">{{ h.score >= 80 ? 'Looking good' : (h.score >= 55 ? 'Room to improve' : 'Needs attention') }}</h5>
+                <div class="small-muted">{{ h.total }} passwords checked</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="list-row"><span class="emoji-badge tint-red">⚠️</span><div class="grow">Weak passwords</div><strong>{{ h.weak|length }}</strong></div>
+            <div class="list-row"><span class="emoji-badge tint-amber">🔁</span><div class="grow">Reused passwords</div><strong>{{ h.reused|length }}</strong></div>
+            <div class="list-row"><span class="emoji-badge tint-gray">⏳</span><div class="grow">Not changed in a year</div><strong>{{ h.old|length }}</strong></div>
+            <div class="list-row"><span class="emoji-badge tint-blue">🔑</span><div class="grow">Logins without 2FA codes saved</div><strong>{{ h.no2fa|length }}</strong></div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header"><ul class="nav nav-tabs card-header-tabs" role="tablist">
+                <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#t-weak">Weak <span class="chip chip-red ms-1">{{ h.weak|length }}</span></a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#t-reused">Reused <span class="chip chip-amber ms-1">{{ h.reused|length }}</span></a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#t-old">Old <span class="chip ms-1">{{ h.old|length }}</span></a></li>
+            </ul></div>
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="t-weak">{{ _self.rows(h.weak, 'strength') }}</div>
+                <div class="tab-pane fade" id="t-reused">{{ _self.rows(h.reused, 'reused') }}</div>
+                <div class="tab-pane fade" id="t-old">{{ _self.rows(h.old, 'old') }}</div>
+            </div>
+        </div>
+        <div class="small-muted">Fix one: open it, press Edit, then the ↻ button makes a strong new password. Change it on the website too.</div>
+    </div>
+</div>
+{% endblock %}

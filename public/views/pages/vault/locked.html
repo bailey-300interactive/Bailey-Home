@@ -1,0 +1,21 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="lock-screen">
+    <div class="lock-icon"><i data-feather="lock" style="width:34px;height:34px"></i></div>
+    <h1 class="h3 fw-bold mb-1">Vault locked</h1>
+    <p class="text-muted mb-4">{{ data.count }} item{{ data.count == 1 ? '' : 's' }} inside. Enter your master password to open it.</p>
+    <form method="post" class="card text-start" autocomplete="off">
+        <div class="card-body p-4">
+            {{ csrf_field() }}<input type="hidden" name="action" value="unlock">
+            <input type="password" name="master" class="form-control form-control-lg mb-2" placeholder="Master password" autocomplete="current-password" autofocus required>
+            {% if data.hint %}<div class="small text-muted mb-3">Hint: {{ data.hint }}</div>{% endif %}
+            <div class="d-grid"><button class="btn btn-lg btn-primary" id="unlockBtn"><i data-feather="unlock"></i> Unlock</button></div>
+        </div>
+    </form>
+    <div class="small text-muted">Forgot it? <a href="/vault/recover">Use your recovery code</a></div>
+    <div class="small text-muted mt-1"><a href="/vault/generator">Password generator</a> works while locked.</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>$('form').on('submit', function () { $('#unlockBtn').prop('disabled', true).html('Unlocking…'); });</script>
+{% endblock %}

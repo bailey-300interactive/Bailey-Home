@@ -1,0 +1,179 @@
+{% extends "bases/base-admin.html" %}
+{% set f = data.f %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Reports</h1><div class="sub">{{ data.range == 'all' ? 'All time' : data.from|nicedate ~ ' – ' ~ data.to|nicedate }}</div></div>
+    <div class="actions">
+        {% if data.type in ['time', 'clients'] %}<a href="{{ query({export: 1}) }}" class="btn btn-light"><i data-feather="download"></i> CSV</a>{% endif %}
+        <button class="btn btn-light" onclick="window.print()"><i data-feather="printer"></i> Print</button>
+    </div>
+</div>
+
+<div class="seg mb-3">
+    {% for k, v in {'time': '⏱️ Time', 'clients': '💼 By client', 'projects': '📁 Project profitability', 'aging': '⏳ Owed to you', 'revenue': '💵 Payments'} %}
+        <a href="?type={{ k }}&range={{ data.range }}" class="{{ data.type == k ? 'active' }}">{{ v }}</a>
+    {% endfor %}
+</div>
+
+{% if data.type in ['time', 'clients', 'revenue'] %}
+<form method="get" class="filters mb-3 js-autosubmit no-print">
+    <input type="hidden" name="type" value="{{ data.type }}">
+    <select name="range" class="form-select">{% for k, v in {'week': 'This week', 'last-week': 'Last week', 'month': 'This month', 'last-month': 'Last month', 'quarter': 'This quarter', 'year': 'This year', 'last-year': 'Last year', 'all': 'All time', 'custom': 'Custom…'} %}<option value="{{ k }}" {{ data.range == k ? 'selected' }}>{{ v }}</option>{% endfor %}</select>
+    {% if data.range == 'custom' %}<input type="date" name="from" value="{{ data.from }}" class="form-control"><input type="date" name="to" value="{{ data.to }}" class="form-control">{% endif %}
+    {% if data.type == 'time' %}
+        <select name="client" class="form-select"><option value="">All clients</option>{% for c in data.client_options %}<option value="{{ c.id }}" {{ f.client == c.id ? 'selected' }}>{{ c.name }}</option>{% endfor %}</select>
+        <select name="project" class="form-select"><option value="">All projects</option>{% for p in data.project_list %}<option value="{{ p.id }}" {{ f.project == p.id ? 'selected' }}>{{ p.client }} · {{ p.name }}</option>{% endfor %}</select>
+        <select name="service" class="form-select"><option value="">All services</option>{% for s in data.services %}<option value="{{ s.id }}" {{ f.service == s.id ? 'selected' }}>{{ s.name }}</option>{% endfor %}</select>
+        {% if data.users|length > 1 %}<select name="user" class="form-select"><option value="">Everyone</option>{% for u in data.users %}<option value="{{ u.id }}" {{ f.user == u.id ? 'selected' }}>{{ u.name }}</option>{% endfor %}</select>{% endif %}
+        <select name="status" class="form-select"><option value="">Billed & unbilled</option><option value="unbilled" {{ f.status == 'unbilled' ? 'selected' }}>Unbilled</option><option value="billed" {{ f.status == 'billed' ? 'selected' }}>Billed</option></select>
+        <select name="group" class="form-select">{% for k, v in {'client': 'Group by client', 'project': 'by project', 'service': 'by service', 'user': 'by person', 'day': 'by day'} %}<option value="{{ k }}" {{ data.group == k ? 'selected' }}>{{ v }}</option>{% endfor %}</select>
+    {% endif %}
+</form>
+{% endif %}
+
+{# ================= Time ================= #}
+{% if data.type == 'time' %}
+    {% set r = data.report %}
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3"><div class="card kpi mb-0"><div class="label">Hours</div><div class="value">{{ r.totals.seconds|hours }}</div></div></div>
+        <div class="col-6 col-lg-3"><div class="card kpi mb-0"><div class="label">Billable hours</div><div class="value">{{ r.totals.billable_seconds|hours }}</div><div class="foot">{{ r.totals.seconds ? (r.totals.billable_seconds / r.totals.seconds * 100)|round : 0 }}% billable</div></div></div>
+        <div class="col-6 col-lg-3"><div class="card kpi mb-0"><div class="label">Billable value</div><div class="value money">{{ r.totals.value|money }}</div></div></div>
+        <div class="col-6 col-lg-3"><div class="card kpi mb-0"><div class="label">Not invoiced yet</div><div class="value money">{{ r.totals.unbilled|money }}</div></div></div>
+    </div>
+    {% if data.chart.values|length > 1 %}<div class="card"><div class="card-body"><div id="hoursChart" style="height:200px"></div></div></div>{% endif %}
+    <div class="card card-flush">
+        <table class="table mb-0">
+            <thead><tr><th>{{ {'client': 'Client / project', 'project': 'Project / service', 'service': 'Service / client', 'user': 'Person / project', 'day': 'Day / project'}[data.group] }}</th><th class="text-end">Hours</th><th class="text-end">Value</th><th class="text-end">Unbilled</th></tr></thead>
+            <tbody>
+            {% for g in r.groups %}
+                <tr class="table-light"><td class="fw-600">{% if g.color and data.group == 'client' %}<span class="color-dot me-1" style="background:{{ g.color }}"></span>{% endif %}{{ data.group == 'day' ? g.name|nicedate('D, M j') : g.name }}</td><td class="text-end fw-600">{{ g.seconds|hours }}</td><td class="text-end money fw-600">{{ g.value|money }}</td><td class="text-end money">{{ g.unbilled|money }}</td></tr>
+                {% for s in g.subs %}<tr><td class="ps-4 text-muted">{{ s.name }}</td><td class="text-end">{{ s.seconds|hours }}</td><td class="text-end money">{{ s.value|money }}</td><td class="text-end money text-muted">{{ s.unbilled|money }}</td></tr>{% endfor %}
+            {% else %}
+                <tr><td colspan="4"><div class="empty">No time for these filters.</div></td></tr>
+            {% endfor %}
+            </tbody>
+            {% if r.groups %}<tfoot><tr><td>Total</td><td class="text-end">{{ r.totals.seconds|hours }}</td><td class="text-end money">{{ r.totals.value|money }}</td><td class="text-end money">{{ r.totals.unbilled|money }}</td></tr></tfoot>{% endif %}
+        </table>
+    </div>
+    {% if r.entries %}
+    <div class="card card-flush">
+        <div class="card-header"><h5 class="card-title">Every entry ({{ r.entries|length }})</h5></div>
+        <div class="table-responsive"><table class="table table-sm mb-0">
+            <thead><tr><th>Date</th><th>Client · project</th><th>Service</th><th>Notes</th><th class="text-end">Hours</th><th class="text-end">Rate</th><th class="text-end">Amount</th></tr></thead>
+            <tbody>{% for e in r.entries|slice(0, 500) %}
+                <tr><td class="text-nowrap">{{ e.date|nicedate('M j') }}</td><td>{{ e.client_name }}{{ e.project_name ? ' · ' ~ e.project_name }}</td><td>{{ e.service_name }}</td><td class="small">{{ e.notes }}</td><td class="text-end">{{ e.seconds|hours }}</td><td class="text-end small text-muted">{{ e.billable_effective ? e.rate_effective|money : '—' }}</td><td class="text-end money">{{ e.value|money }}</td></tr>
+            {% endfor %}</tbody>
+        </table></div>
+    </div>
+    {% endif %}
+{% endif %}
+
+{# ================= Clients ================= #}
+{% if data.type == 'clients' %}
+    <div class="card card-flush">
+        <div class="table-responsive"><table class="table table-hover mb-0">
+            <thead><tr><th>Client</th><th class="text-end">Hours</th><th class="text-end">Billable value</th><th class="text-end">Invoiced</th><th class="text-end">Collected</th><th class="text-end">Expenses</th><th class="text-end">$ / hour</th></tr></thead>
+            <tbody>
+            {% for c in data.clients_report %}
+                <tr data-href="/time/client/{{ c.id }}" class="cursor-pointer">
+                    <td><span class="color-dot me-2" style="background:{{ c.color }}"></span><span class="fw-600">{{ c.name }}</span>
+                        {% if c.projects %}<div class="small-muted ps-3">{% for pj in c.projects|slice(0, 4) %}{{ pj.name }} {{ pj.seconds|hours }}h{{ not loop.last ? ' · ' }}{% endfor %}</div>{% endif %}</td>
+                    <td class="text-end">{{ c.seconds|hours }}</td>
+                    <td class="text-end money">{{ c.value|money }}</td>
+                    <td class="text-end money">{{ c.invoiced|money }}</td>
+                    <td class="text-end money fw-600">{{ c.collected|money }}</td>
+                    <td class="text-end money text-muted">{{ c.expenses|money }}</td>
+                    <td class="text-end">{{ c.effective_rate ? c.effective_rate|money : '—' }}</td>
+                </tr>
+            {% else %}
+                <tr><td colspan="7"><div class="empty">Nothing in this period.</div></td></tr>
+            {% endfor %}
+            </tbody>
+            {% if data.clients_report %}<tfoot><tr><td>Total</td>
+                <td class="text-end">{{ data.clients_report|reduce((a, c) => a + c.seconds, 0)|hours }}</td>
+                <td class="text-end money">{{ data.clients_report|reduce((a, c) => a + c.value, 0)|money }}</td>
+                <td class="text-end money">{{ data.clients_report|reduce((a, c) => a + c.invoiced, 0)|money }}</td>
+                <td class="text-end money">{{ data.clients_report|reduce((a, c) => a + c.collected, 0)|money }}</td>
+                <td class="text-end money">{{ data.clients_report|reduce((a, c) => a + c.expenses, 0)|money }}</td><td></td></tr></tfoot>{% endif %}
+        </table></div>
+    </div>
+    <div class="small-muted">$ / hour = money collected in the period divided by all hours tracked for the client in the period.</div>
+{% endif %}
+
+{# ================= Projects ================= #}
+{% if data.type == 'projects' %}
+    <div class="card card-flush">
+        <div class="table-responsive"><table class="table table-hover mb-0">
+            <thead><tr><th>Project</th><th>Billing</th><th class="text-end">Hours</th><th class="text-end">Budget</th><th class="text-end">Value</th><th class="text-end">Expenses</th><th class="text-end">$ / hour</th></tr></thead>
+            <tbody>
+            {% for p in data.projects_report %}
+                <tr data-href="/time/project/{{ p.id }}" class="cursor-pointer">
+                    <td><span class="fw-600">{{ p.name }}</span><div class="small-muted">{{ p.client_name }}</div></td>
+                    <td class="small">{{ data.billing[p.billing] }}</td>
+                    <td class="text-end">{{ p.hours|number_format(1) }}</td>
+                    <td class="text-end" style="min-width:120px">{% if p.budget_pct is not null %}<div class="small {{ p.budget_pct > 100 ? 'text-danger fw-600' }}">{{ p.budget_pct }}%</div><div class="bar {{ p.budget_pct > 100 ? 'over' : (p.budget_pct > 80 ? 'warn' : 'ok') }}"><span style="width:{{ min(100, p.budget_pct) }}%"></span></div>{% else %}—{% endif %}</td>
+                    <td class="text-end money">{{ p.value|money }}</td>
+                    <td class="text-end money text-muted">{{ p.expenses|money }}</td>
+                    <td class="text-end fw-600">{{ p.effective_rate ? p.effective_rate|money : '—' }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table></div>
+    </div>
+    <div class="small-muted">$ / hour = (billable value or flat fee − project expenses) ÷ hours. Low numbers on flat-fee projects mean they took longer than priced.</div>
+{% endif %}
+
+{# ================= Aging ================= #}
+{% if data.type == 'aging' %}
+    {% set a = data.aging %}
+    <div class="row g-3 mb-4">
+        {% for k, v in a.buckets %}
+            <div class="col"><div class="card kpi mb-0"><div class="label">{{ k == 'current' ? 'Not due yet' : k ~ ' days late' }}</div><div class="value money {{ k != 'current' and v > 0 ? 'neg' }}">{{ v|money }}</div></div></div>
+        {% endfor %}
+    </div>
+    <div class="card card-flush">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Client</th>{% for k, v in a.buckets %}<th class="text-end">{{ k == 'current' ? 'Current' : k }}</th>{% endfor %}<th class="text-end">Total</th></tr></thead>
+            <tbody>
+            {% for c in a.clients %}
+                <tr data-href="/time/invoices?client={{ c.id }}&status=outstanding" class="cursor-pointer"><td class="fw-600">{{ c.name }}</td>{% for k, v in a.buckets %}<td class="text-end money {{ c[k] > 0 and k != 'current' ? 'text-danger' }}">{{ c[k] > 0 ? c[k]|money : '—' }}</td>{% endfor %}<td class="text-end money fw-600">{{ c.total|money }}</td></tr>
+            {% else %}
+                <tr><td colspan="7"><div class="empty"><div class="big">🎉</div>Nobody owes you anything.</div></td></tr>
+            {% endfor %}
+            </tbody>
+            {% if a.clients %}<tfoot><tr><td>Total</td>{% for k, v in a.buckets %}<td class="text-end money">{{ v|money }}</td>{% endfor %}<td class="text-end money">{{ a.total|money }}</td></tr></tfoot>{% endif %}
+        </table>
+    </div>
+{% endif %}
+
+{# ================= Revenue ================= #}
+{% if data.type == 'revenue' %}
+    <div class="card"><div class="card-header"><h5 class="card-title">Payments received, last 12 months</h5></div><div class="card-body pt-2"><div id="revChart" style="height:240px"></div></div></div>
+    <div class="row">
+        <div class="col-lg-5"><div class="card card-flush">
+            <div class="card-header"><h5 class="card-title">By client · {{ data.from|nicedate('M j') }} – {{ data.to|nicedate('M j, Y') }}</h5></div>
+            {% set tot = data.by_client|reduce((a, c) => a + c.total, 0) %}
+            {% for c in data.by_client %}<div class="list-row"><span class="color-dot" style="background:{{ c.color }}"></span><div class="grow"><div class="title">{{ c.name }}</div><div class="bar mt-1"><span style="width:{{ tot ? (c.total / tot * 100)|round : 0 }}%;background:{{ c.color }}"></span></div></div><span class="money fw-600">{{ c.total|money }}</span></div>{% else %}<div class="empty py-4">No payments in this period.</div>{% endfor %}
+        </div></div>
+        <div class="col-lg-7"><div class="card card-flush">
+            <div class="card-header"><h5 class="card-title">Payments</h5></div>
+            <table class="table table-sm mb-0"><tbody>{% for pm in data.payments %}<tr><td>{{ pm.date|nicedate('M j') }}</td><td>{{ pm.client }}</td><td><a href="/time/invoice/{{ pm.invoice_id }}">{{ pm.number }}</a></td><td class="small text-muted">{{ pm.method }}</td><td class="text-end money fw-600">{{ pm.amount|money }}</td></tr>{% else %}<tr><td class="text-center text-muted py-3">None</td></tr>{% endfor %}</tbody></table>
+        </div></div>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if data.type == 'time' and data.chart.values|length > 1 %}
+const hc = {{ data.chart|js }};
+chart('#hoursChart', { chart: { type: 'bar', height: 200 }, series: [{ name: 'Hours', data: hc.values }], plotOptions: { bar: { columnWidth: '60%', borderRadius: 3, borderRadiusApplication: 'end' } },
+    xaxis: { categories: hc.labels, labels: { rotate: 0, hideOverlappingLabels: true } }, yaxis: { labels: { formatter: v => v.toFixed(0) + 'h' } }, tooltip: { y: { formatter: v => v.toFixed(2) + ' h' } } });
+{% endif %}
+{% if data.type == 'revenue' %}
+const rv = {{ data.revenue|js }};
+chart('#revChart', { chart: { type: 'bar', height: 240 }, series: [{ name: 'Received', data: rv.values }], colors: [SERIES[2]], plotOptions: { bar: { columnWidth: '55%', borderRadius: 4, borderRadiusApplication: 'end' } },
+    xaxis: { categories: rv.labels }, yaxis: { labels: { formatter: moneyShort } }, tooltip: { y: { formatter: v => fmtMoney(v) } } });
+{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,4 @@
+Require all granted
+<FilesMatch "^(?!.*\.php$)">
+    Require all denied
+</FilesMatch>

@@ -1,0 +1,7 @@
+{{ header|raw }}
+<p style="margin:0 0 6px;color:#8a939c;font-size:13px">⏰ Reminder · {{ data.when }}</p>
+<h2 style="margin:0 0 14px;font-size:22px">{{ data.title }}</h2>
+{% if data.notes %}<p style="white-space:pre-line;color:#495057;margin:0 0 14px">{{ data.notes }}</p>{% endif %}
+{% if data.repeat %}<p style="color:#8a939c;font-size:13px;margin:0 0 18px">Repeats: {{ data.repeat }}</p>{% endif %}
+<a href="{{ data.url }}" style="display:inline-block;background:#3b7ddd;color:#fff;text-decoration:none;padding:10px 18px;border-radius:9px;font-weight:600">Open reminders</a>
+{{ footer|raw }}

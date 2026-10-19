@@ -1,0 +1,104 @@
+{% set q = base.quick %}
+<div class="modal fade" id="quickModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="quick-tabs">
+                <button type="button" data-tab="reminder" class="active">🔔 Reminder</button>
+                <button type="button" data-tab="time">⏱️ Time</button>
+                <button type="button" data-tab="expense">💳 Expense</button>
+                <button type="button" class="btn-close ms-auto align-self-center" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            {# ---- Reminder ---- #}
+            <form class="quick-pane p-3" data-pane="reminder" data-endpoint="/app/Ajax/reminders.php">
+                <input type="hidden" name="action" value="quick">
+                <input type="text" name="text" class="form-control form-control-lg" placeholder="e.g. Pay water bill every month on the 15th !high" autocomplete="off" required>
+                <div class="parse-preview" id="parsePreview"><span class="small-muted">Type naturally: dates, times, “every week”, <code class="k">!high</code>, <code class="k">#list</code></span></div>
+                <div class="row g-2 mt-1">
+                    <div class="col-6">
+                        <select name="list_id" class="form-select form-select-sm">
+                            <option value="">No list</option>
+                            {% for l in q.lists %}<option value="{{ l.id }}">{{ l.icon }} {{ l.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-6 text-end">
+                        <button class="btn btn-primary">Add reminder</button>
+                    </div>
+                </div>
+            </form>
+
+            {# ---- Time ---- #}
+            <form class="quick-pane p-3 hidden" data-pane="time" data-endpoint="/app/Ajax/time.php">
+                <input type="hidden" name="action" value="save">
+                <div class="mb-2">
+                    <label class="form-label">Project</label>
+                    <select name="project_id" class="form-select">
+                        <option value="">No project</option>
+                        {% for client, projects in q.projects %}
+                            <optgroup label="{{ client }}">{% for p in projects %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</optgroup>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label">Service</label>
+                        <select name="service_id" class="form-select">
+                            <option value="">—</option>
+                            {% for s in q.services %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-3"><label class="form-label">Date</label><input type="date" name="date" class="form-control" value="{{ base.today }}"></div>
+                    <div class="col-3"><label class="form-label">Hours</label><input type="text" name="duration" class="form-control" placeholder="1:30" inputmode="decimal"></div>
+                </div>
+                <textarea name="notes" class="form-control mb-2" rows="2" placeholder="What did you work on?"></textarea>
+                <div class="d-flex align-items-center gap-2">
+                    <label class="form-check mb-0"><input type="checkbox" name="billable" value="1" class="form-check-input" checked> <span class="form-check-label">Billable</span></label>
+                    <button type="button" class="btn btn-light ms-auto js-quick-start"><i data-feather="play"></i> Start timer</button>
+                    <button class="btn btn-primary">Save time</button>
+                </div>
+            </form>
+
+            {# ---- Expense ---- #}
+            <form class="quick-pane p-3 hidden" data-pane="expense" data-endpoint="/app/Ajax/money.php" enctype="multipart/form-data">
+                <input type="hidden" name="action" value="save">
+                <input type="hidden" name="kind" value="expense">
+                <div class="row g-2 mb-2">
+                    <div class="col-5"><label class="form-label">Amount</label><input type="text" name="amount" class="form-control form-control-lg input-money" placeholder="0.00" inputmode="decimal" required></div>
+                    <div class="col-7"><label class="form-label">Where</label><input type="text" name="payee" class="form-control form-control-lg js-payee" placeholder="Store or person" list="payeeList" autocomplete="off"></div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label">Category</label>
+                        <select name="category_id" class="form-select js-category">
+                            <option value="">Uncategorized</option>
+                            {% for c in q.categories|filter(c => c.kind == 'expense') %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Account</label>
+                        <select name="account_id" class="form-select" required>
+                            {% for a in q.accounts %}<option value="{{ a.id }}">{{ a.name }}</option>{% else %}<option value="">Add an account first</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6"><label class="form-label">Date</label><input type="date" name="date" class="form-control" value="{{ base.today }}"></div>
+                    <div class="col-6">
+                        <label class="form-label">Bill to client</label>
+                        <select name="client_id" class="form-select js-bill-client">
+                            <option value="">—</option>
+                            {% for c in q.clients %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+                        </select>
+                        <input type="hidden" name="billable" value="1">
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <label class="btn btn-light btn-sm mb-0"><i data-feather="paperclip"></i> Receipt <input type="file" name="receipt" accept="image/*,application/pdf" class="d-none"></label>
+                    <span class="small-muted js-file-name"></span>
+                    <button class="btn btn-primary ms-auto">Save expense</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<datalist id="payeeList">{% for p in q.payees %}<option value="{{ p }}">{% endfor %}</datalist>

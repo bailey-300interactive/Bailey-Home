@@ -1,0 +1,31 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="row justify-content-center">
+    <div class="col-lg-7 col-xl-6">
+        <div class="card mt-3" id="kit">
+            <div class="card-body p-4 p-md-5">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <span class="emoji-badge" style="width:48px;height:48px;font-size:1.5rem">🛟</span>
+                    <div><h1 class="h3 fw-bold mb-0">Your recovery code</h1><div class="text-muted">{{ base.site_profile.site_name }} vault · {{ data.name }} · {{ data.created }}</div></div>
+                </div>
+                <p>If you ever forget your master password, this code lets you set a new one. <strong>This is the only time it will be shown.</strong></p>
+                <div class="recovery-code my-4" id="code">{{ data.code }}</div>
+                <ul class="small text-muted mb-4">
+                    <li>Print this page or write the code down and keep it somewhere safe, away from your computer.</li>
+                    <li>Anyone with this code <em>and</em> your login can open your vault, so treat it like a key.</li>
+                    <li>You can make a new code any time in Vault settings (the old one stops working).</li>
+                </ul>
+                <div class="d-flex flex-wrap gap-2 no-print">
+                    <button type="button" class="btn btn-light" onclick="window.print()"><i data-feather="printer"></i> Print</button>
+                    <button type="button" class="btn btn-light" data-copy="{{ data.code }}" data-copy-label="Recovery code"><i data-feather="copy"></i> Copy</button>
+                    <form method="post" class="ms-auto">
+                        {{ csrf_field() }}
+                        <label class="form-check d-inline-flex align-items-center gap-2 me-2 mb-0"><input type="checkbox" class="form-check-input" required> <span class="form-check-label small">I saved it</span></label>
+                        <button class="btn btn-primary">Continue</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

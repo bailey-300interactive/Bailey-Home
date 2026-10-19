@@ -1,0 +1,68 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Goals</h1><div class="sub">Saving for something? Track it here, by hand or from a savings account's balance.</div></div>
+    <div class="actions"><button class="btn btn-primary js-goal" data-goal='{}'><i data-feather="plus"></i> New goal</button></div>
+</div>
+<div class="row g-3">
+    {% for g in data.goals %}
+        <div class="col-md-6 col-xl-4">
+            <div class="card goal-card h-100 mb-0 {{ g.archived ? 'opacity-50' }}">
+                <div class="card-body">
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <span class="emoji">{{ g.emoji }}</span>
+                        <div class="grow"><h5 class="mb-0 fw-bold">{{ g.name }}</h5><div class="small-muted">{{ g.account_name ? 'Tracks ' ~ g.account_name : 'Updated by hand' }}{% if g.target_date %} · by {{ g.target_date|nicedate('M Y') }}{% endif %}</div></div>
+                        <button class="btn btn-light btn-icon js-goal" data-goal="{{ g|json_encode }}"><i data-feather="edit-2"></i></button>
+                    </div>
+                    <div class="d-flex align-items-end mb-2"><span class="fs-3 fw-bold money">{{ g.current|money }}</span><span class="text-muted ms-2 mb-1">of {{ g.target|money }}</span><span class="ms-auto fw-600">{{ g.pct }}%</span></div>
+                    <div class="bar bar-lg ok mb-3"><span style="width:{{ g.pct }}%;background:{{ g.color }}"></span></div>
+                    {% if g.pct >= 100 %}<div class="chip chip-green">🎉 Reached!</div>
+                    {% elseif g.per_month %}<div class="small text-muted">Save <strong class="text-body">{{ g.per_month|money }}</strong> a month for {{ g.months_left }} month{{ g.months_left > 1 ? 's' }} to make it.</div>{% endif %}
+                    {% if not g.account_id and g.pct < 100 %}
+                        <form method="post" class="d-flex gap-2 mt-3">{{ csrf_field() }}<input type="hidden" name="action" value="goal-add"><input type="hidden" name="id" value="{{ g.id }}">
+                            <input name="amount" class="form-control form-control-sm input-money" placeholder="Add $" inputmode="decimal"><button class="btn btn-sm btn-light">Add</button></form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="col-12"><div class="card"><div class="empty"><div class="big">🎯</div>No goals yet. Vacation, emergency fund, a new car?</div></div></div>
+    {% endfor %}
+</div>
+
+<div class="modal fade" id="goalModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" method="post" id="goalForm">
+            {{ csrf_field() }}<input type="hidden" name="action" value="goal-save"><input type="hidden" name="id">
+            <div class="modal-header"><h5 class="modal-title">Goal</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body"><div class="row g-2">
+                <div class="col-2"><label class="form-label">Icon</label><input name="emoji" class="form-control text-center" value="🎯" maxlength="4"></div>
+                <div class="col-7"><label class="form-label">Name</label><input name="name" class="form-control" required placeholder="Emergency fund"></div>
+                <div class="col-3"><label class="form-label">Color</label><input type="color" name="color" class="form-control form-control-color w-100" value="#1cbb8c"></div>
+                <div class="col-6"><label class="form-label">Target</label><input name="target" class="form-control input-money" inputmode="decimal" required></div>
+                <div class="col-6"><label class="form-label">By</label><input type="date" name="target_date" class="form-control"></div>
+                <div class="col-6"><label class="form-label">Track an account</label><select name="account_id" class="form-select"><option value="">No, update by hand</option>{% for a in data.accounts %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select></div>
+                <div class="col-6"><label class="form-label">Saved so far</label><input name="saved" class="form-control input-money" inputmode="decimal" value="0"></div>
+                <div class="col-12"><label class="form-check"><input type="checkbox" name="archived" value="1" class="form-check-input"> <span class="form-check-label">Archived</span></label></div>
+            </div></div>
+            <div class="modal-footer">
+                <button type="submit" form="goalDelete" class="btn btn-outline-danger me-auto js-goal-del hidden">Delete</button>
+                <button class="btn btn-primary">Save</button>
+            </div>
+        </form>
+        <form method="post" id="goalDelete" data-confirm="Delete this goal?">{{ csrf_field() }}<input type="hidden" name="action" value="goal-delete"><input type="hidden" name="id"></form>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+$(document).on('click', '.js-goal', function () {
+    const g = $(this).data('goal') || {}, f = $('#goalForm')[0];
+    f.reset(); f.id.value = g.id || '';
+    ['emoji', 'name', 'color', 'target', 'target_date', 'account_id', 'saved'].forEach(k => { if (g[k] != null) f[k].value = g[k]; });
+    f.archived.checked = g.archived == 1;
+    $('#goalDelete [name=id]').val(g.id || ''); $('.js-goal-del').toggleClass('hidden', !g.id);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('goalModal')).show();
+});
+</script>
+{% endblock %}

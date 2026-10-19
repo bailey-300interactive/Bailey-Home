@@ -1,0 +1,9 @@
+<?php return; ?>
+
+[APP]
+; Full address of the site, no trailing slash (used in emails and invoice links)
+base_url = 'https://home.300interactive.com'
+; Show errors on screen. Keep off on the live server.
+debug = 0
+; Send emails at all (reminder alerts, digests, invoices, password resets)
+send_emails = 1

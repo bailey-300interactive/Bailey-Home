@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="csrf-token" content="{{ base.csrf }}">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{% block title %}{% endblock %} · {{ base.site_profile.site_name }}</title>
+    <link href="/public/vendor/adminkit/css/light.css" rel="stylesheet">
+    <link href="/public/assets/css/home.css?v=1" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/public/assets/img/favicon-32.png">
+    <link rel="apple-touch-icon" href="/public/assets/img/apple-touch-icon.png">
+    <style>
+        body { opacity: 0; }
+        .auth-bg { min-height: 100vh; background: radial-gradient(1200px 600px at 10% -10%, rgba(79,143,240,.25), transparent 60%), radial-gradient(900px 500px at 110% 110%, rgba(122,90,248,.22), transparent 60%), #f4f6fa; }
+        .auth-card { max-width: 420px; width: 100%; }
+        .auth-brand { display: flex; align-items: center; justify-content: center; gap: .6rem; font-weight: 700; font-size: 1.35rem; color: #1e2a38; margin-bottom: 1.5rem; }
+        .auth-brand .brand-mark { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(135deg, #4f8ff0, #7a5af8); color: #fff; font-size: 20px; box-shadow: 0 6px 18px rgba(79,143,240,.4); }
+        .otp-input { letter-spacing: .5em; text-align: center; font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body data-theme="default">
+<main class="auth-bg d-flex align-items-center justify-content-center p-3">
+    {% block body %}{% endblock %}
+</main>
+<script src="/public/vendor/jquery-3.7.0.min.js"></script>
+<script src="/public/vendor/adminkit/js/app.js"></script>
+<script src="/public/assets/js/home.js?v=1"></script>
+<script>
+    $(function () { {% for message in messages %}ShowAlert({{ message.message|js }}, {{ message.type|js }});{% endfor %} });
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

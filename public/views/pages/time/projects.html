@@ -1,0 +1,35 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Projects</h1><div class="sub">{{ data.projects|length }} {{ data.status != 'all' ? data.status }} projects</div></div>
+    <div class="actions">
+        <div class="seg">{% for k, v in {'active': 'Active', 'completed': 'Completed', 'archived': 'Archived', 'all': 'All'} %}<a href="?status={{ k }}" class="{{ data.status == k ? 'active' }}">{{ v }}</a>{% endfor %}</div>
+        <button class="btn btn-primary js-project" data-project='{}' {{ data.client_options is empty ? 'disabled' }}><i data-feather="plus"></i> New project</button>
+    </div>
+</div>
+<div class="row g-3">
+    {% for p in data.projects %}
+        <div class="col-md-6 col-xl-4">
+            <a href="/time/project/{{ p.id }}" class="card h-100 mb-0 text-decoration-none text-reset">
+                <div class="card-body">
+                    <div class="d-flex align-items-start gap-2 mb-2">
+                        <span class="color-dot mt-2" style="background:{{ p.color ?: p.client_color ?: '#3b7ddd' }};width:12px;height:12px"></span>
+                        <div class="grow" style="min-width:0"><div class="fw-bold truncate">{{ p.name }}</div><div class="small-muted truncate">{{ p.client_name }}</div></div>
+                        {% if p.status != 'active' %}<span class="chip">{{ p.status }}</span>{% endif %}
+                    </div>
+                    <div class="small-muted mb-3">{{ data.billing[p.billing] }}{% if p.billing == 'hourly_project' and p.rate %} · {{ p.rate|money }}/h{% elseif p.billing == 'flat_fee' %} · {{ p.flat_fee|money }}{% endif %}{% if p.due_date %} · due {{ p.due_date|relday }}{% endif %}</div>
+                    <div class="d-flex gap-3">
+                        <div><div class="small-muted">Hours</div><div class="fw-bold">{{ p.hours|number_format(1) }}{% if p.budget_hours %}<span class="text-muted fw-normal"> / {{ p.budget_hours|number_format(0) }}</span>{% endif %}</div></div>
+                        <div><div class="small-muted">Value</div><div class="fw-bold money">{{ p.value|money }}</div></div>
+                        <div><div class="small-muted">Unbilled</div><div class="fw-bold money {{ p.unbilled > 0 ? 'text-primary' }}">{{ p.unbilled|money }}</div></div>
+                    </div>
+                    {% if p.budget_pct is not null %}<div class="bar mt-3 {{ p.budget_pct > 100 ? 'over' : (p.budget_pct > 80 ? 'warn' : 'ok') }}"><span style="width:{{ min(100, p.budget_pct) }}%"></span></div><div class="small-muted mt-1">{{ p.budget_pct }}% of budget used</div>{% endif %}
+                </div>
+            </a>
+        </div>
+    {% else %}
+        <div class="col-12"><div class="card"><div class="empty"><div class="big">📁</div>{{ data.client_options is empty ? 'Add a client first, then its projects.' : 'No projects here.' }}</div></div></div>
+    {% endfor %}
+</div>
+{% include 'partials/project-modal.html' %}
+{% endblock %}

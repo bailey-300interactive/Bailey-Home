@@ -1,0 +1,162 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Import & export</h1><div class="sub">Bring your passwords in. Everything is encrypted with your vault key as it's saved. {{ data.vault_count }} items in your vault now.</div></div>
+</div>
+
+<div class="seg mb-4">
+    <a href="?tab=database" class="{{ data.tab == 'database' ? 'active' }}">🗄️ Old Accounts database</a>
+    <a href="?tab=csv" class="{{ data.tab == 'csv' ? 'active' }}">📄 CSV from another app</a>
+    <a href="?tab=export" class="{{ data.tab == 'export' ? 'active' }}">⬇️ Export</a>
+</div>
+
+{% if data.tab == 'database' %}
+<div class="row">
+    <div class="col-lg-7">
+        {% if data.legacy %}
+            {% set L = data.legacy %}
+            <div class="card">
+                <div class="card-header d-flex align-items-center"><h5 class="card-title">Connected to {{ data.legacy_db }}</h5>
+                    <form method="post" class="ms-auto">{{ csrf_field() }}<input type="hidden" name="action" value="legacy-forget"><button class="btn btn-link btn-sm">Disconnect</button></form>
+                </div>
+                <div class="card-body">
+                    <div class="stat-strip border rounded mb-3">
+                        <div><div class="l">Accounts</div><div class="v">{{ L.total }}</div></div>
+                        <div><div class="l">Owners</div><div class="v">{{ L.owners|length }}</div></div>
+                        <div><div class="l">Passwords look</div><div class="v" style="font-size:1rem">{{ L.encrypted_share > 0.5 ? '🔒 encrypted / hashed' : '✓ readable' }}</div></div>
+                    </div>
+                    {% if L.encrypted_share > 0.5 %}
+                        <div class="alert alert-warning small p-3">
+                            Most passwords in that table don't look like plain text. If your old app encrypted them, copy <code>settings/legacy-decrypt.php.sample</code> to <code>settings/legacy-decrypt.php</code> and fill in how it decrypted them, then come back here.
+                            {% if L.has_decrypt_hook %}<strong>A decrypt file is in place and will be used.</strong>{% endif %}
+                            If they were hashed (bcrypt / md5 / sha), they can't be turned back into passwords.
+                        </div>
+                    {% endif %}
+                    <h6 class="fw-600">Preview</h6>
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm">
+                            <thead><tr><th>Name</th><th>Username</th><th>URL</th><th>Password</th></tr></thead>
+                            <tbody>
+                            {% for r in L.preview %}
+                                <tr><td>{{ r.name }}{% if r.has_description %} <span class="chip" title="Has a description, imported as notes">📝</span>{% endif %}</td><td class="truncate" style="max-width:160px">{{ r.username }}</td><td class="truncate" style="max-width:160px">{{ r.url|domain }}</td><td><code>{{ r.password }}</code> {% if r.looks != 'plain' %}<span class="chip chip-amber">{{ r.looks }}</span>{% endif %}</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <form method="post">
+                        {{ csrf_field() }}<input type="hidden" name="action" value="legacy-import">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Whose accounts</label>
+                                <select name="owner" class="form-select">
+                                    <option value="all">Everyone's ({{ L.total }})</option>
+                                    {% for o in L.owners %}<option value="{{ o.id }}" {{ o.username == session.username ? 'selected' }}>{{ o.username }} ({{ o.accounts }})</option>{% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6"><label class="form-label">Put them in folder</label><input name="folder" class="form-control" value="Imported" placeholder="Leave empty for no folder"></div>
+                            <div class="col-12"><label class="form-check"><input type="checkbox" name="skip_dupes" value="1" class="form-check-input" checked> <span class="form-check-label">Skip anything already in my vault</span></label></div>
+                        </div>
+                        <button class="btn btn-primary mt-3"><i data-feather="download"></i> Import into my vault</button>
+                    </form>
+                </div>
+            </div>
+        {% else %}
+            <div class="card">
+                <div class="card-header"><h5 class="card-title">Connect to your old Accounts database</h5></div>
+                <div class="card-body">
+                    {% if data.legacy_error %}<div class="alert alert-danger small p-3">{{ data.legacy_error }}</div>{% endif %}
+                    <p class="small text-muted">Reads the <code>accounts</code> and <code>admin_users</code> tables (name, username, password, url, description). It only reads, nothing in the old database changes. The connection details are kept only until you finish, encrypted with your vault key.</p>
+                    <form method="post" autocomplete="off">
+                        {{ csrf_field() }}<input type="hidden" name="action" value="legacy-connect">
+                        <div class="row g-3">
+                            <div class="col-md-8"><label class="form-label">Host</label><input name="host" class="form-control" value="{{ data.defaults.host }}"></div>
+                            <div class="col-md-4"><label class="form-label">Port</label><input name="port" class="form-control" placeholder="3306"></div>
+                            <div class="col-md-12"><label class="form-label">Database</label><input name="dbname" class="form-control" value="{{ data.defaults.dbname }}" required></div>
+                            <div class="col-md-6"><label class="form-label">MySQL user</label><input name="user" class="form-control" required autocomplete="off"></div>
+                            <div class="col-md-6"><label class="form-label">MySQL password</label><input name="password" type="password" class="form-control" autocomplete="new-password"></div>
+                        </div>
+                        <button class="btn btn-primary mt-3">Connect & preview</button>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+    <div class="col-lg-5">
+        <div class="card"><div class="card-body small">
+            <h6 class="fw-600">Tip: give Home read-only access</h6>
+            <p class="text-muted">On the server, a user that can only read the old database is safest:</p>
+<pre class="bg-light p-2 rounded small mb-2">GRANT SELECT ON bailey_accounts.*
+  TO 'home_user'@'localhost';</pre>
+            <p class="text-muted mb-0">Then use Home's own database user above. You can also run the import from the command line:<br><code>php dev/import-accounts.php</code></p>
+        </div></div>
+    </div>
+</div>
+{% endif %}
+
+{% if data.tab == 'csv' %}
+<div class="row">
+    <div class="col-lg-7">
+        {% if data.csv %}
+            <div class="card">
+                <div class="card-header d-flex align-items-center"><h5 class="card-title">{{ data.csv.file }} · {{ data.csv.label }} format</h5>
+                    <form method="post" class="ms-auto">{{ csrf_field() }}<input type="hidden" name="action" value="csv-cancel"><button class="btn btn-link btn-sm">Choose another file</button></form>
+                </div>
+                <div class="card-body">
+                    <p><strong>{{ data.csv.count }}</strong> items found{% if data.csv.folders %} in {{ data.csv.folders|length }} folder{{ data.csv.folders|length > 1 ? 's' }} ({{ data.csv.folders|slice(0, 5)|join(', ') }}{{ data.csv.folders|length > 5 ? '…' }}){% endif %}.</p>
+                    <div class="table-responsive mb-3"><table class="table table-sm">
+                        <thead><tr><th>Name</th><th>Username</th><th>Folder</th><th>Password</th></tr></thead>
+                        <tbody>{% for r in data.csv.sample %}<tr><td>{{ r.name }} {% if r.totp %}<span class="chip chip-blue">2FA</span>{% endif %}{% if r.type != 'login' %}<span class="chip">{{ r.type }}</span>{% endif %}</td><td class="truncate" style="max-width:180px">{{ r.username }}</td><td>{{ r.folder }}</td><td><code>{{ r.password }}</code></td></tr>{% endfor %}</tbody>
+                    </table></div>
+                    <form method="post">
+                        {{ csrf_field() }}<input type="hidden" name="action" value="csv-import">
+                        <div class="row g-3">
+                            <div class="col-md-7"><label class="form-label">Put everything in one folder</label><input name="folder" class="form-control" placeholder="Leave empty to keep the file's folders"></div>
+                            <div class="col-md-5 d-flex align-items-end"><label class="form-check"><input type="checkbox" name="skip_dupes" value="1" class="form-check-input" checked> <span class="form-check-label">Skip duplicates</span></label></div>
+                        </div>
+                        <button class="btn btn-primary mt-3">Import {{ data.csv.count }} items</button>
+                    </form>
+                </div>
+            </div>
+        {% else %}
+            <div class="card">
+                <div class="card-header"><h5 class="card-title">Upload a CSV export</h5></div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data">
+                        {{ csrf_field() }}<input type="hidden" name="action" value="csv-preview">
+                        <input type="file" name="file" accept=".csv,text/csv" class="form-control form-control-lg mb-3" required>
+                        <button class="btn btn-primary">Preview</button>
+                    </form>
+                    <p class="small text-muted mt-3 mb-0">The format is recognised from the column names. Any CSV with columns like name, username, password and url also works.</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+    <div class="col-lg-5">
+        <div class="card"><div class="card-header"><h5 class="card-title">Where to find the export</h5></div>
+            <div class="list-row"><span class="emoji-badge">🌐</span><div class="grow"><div class="title">Chrome / Edge / Brave</div><div class="meta">Settings → Passwords (Password Manager) → Settings → Export passwords</div></div></div>
+            <div class="list-row"><span class="emoji-badge">🧭</span><div class="grow"><div class="title">Safari / iCloud Keychain</div><div class="meta">Mac: Passwords app → File → Export All Passwords</div></div></div>
+            <div class="list-row"><span class="emoji-badge">🦊</span><div class="grow"><div class="title">Firefox</div><div class="meta">about:logins → ⋯ → Export Logins</div></div></div>
+            <div class="list-row"><span class="emoji-badge">🛡️</span><div class="grow"><div class="title">Bitwarden, 1Password, LastPass, KeePass, Dashlane</div><div class="meta">Export as CSV (unencrypted)</div></div></div>
+            <div class="card-body small text-muted border-top">Exported CSVs are plain text. Delete the file after importing.</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if data.tab == 'export' %}
+<div class="row"><div class="col-lg-6">
+    <div class="card">
+        <div class="card-header"><h5 class="card-title">Export your vault</h5></div>
+        <div class="card-body">
+            <p class="small text-muted">Downloads a CSV with every item and password in plain text, for a backup or to move to another password manager. It can be imported back here too. Keep the file somewhere safe and delete it when you're done.</p>
+            <form method="post" autocomplete="off">
+                {{ csrf_field() }}<input type="hidden" name="action" value="export">
+                <label class="form-label">Confirm your master password</label>
+                <input type="password" name="master" class="form-control mb-3" required autocomplete="current-password">
+                <button class="btn btn-primary"><i data-feather="download"></i> Download CSV</button>
+            </form>
+        </div>
+    </div>
+</div></div>
+{% endif %}
+{% endblock %}

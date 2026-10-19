@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Invoice {{ data.invoice.number }} · {{ data.company.name }}</title>
+    <link href="/public/vendor/adminkit/css/light.css" rel="stylesheet">
+    <link href="/public/assets/css/home.css?v=1" rel="stylesheet">
+    <style>body { background: #f4f6fa; } .wrap { max-width: 860px; margin: 2.5rem auto; padding: 0 1rem; }</style>
+</head>
+<body>
+<div class="wrap">
+    <div class="d-flex align-items-center mb-3 no-print">
+        <div class="text-muted small">Invoice from {{ data.company.name }}</div>
+        <button class="btn btn-light btn-sm ms-auto" onclick="window.print()">Print / save as PDF</button>
+    </div>
+    {% set inv = data.invoice %}{% set company = data.company %}
+    {% include 'partials/invoice-paper.html' %}
+    <div class="text-center small text-muted mt-3 no-print">Questions? Reply to the email this came with{{ company.email ? ' or write to ' ~ company.email }}.</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Services</h1><div class="sub">The kinds of work you do. Projects billed "by service rate" use these rates.</div></div>
+</div>
+<div class="row"><div class="col-lg-8">
+    <div class="card card-flush">
+        <table class="table mb-0">
+            <thead><tr><th>Service</th><th>Rate</th><th>Billable</th><th>Hours</th><th></th></tr></thead>
+            <tbody>
+            {% for s in data.all_services %}
+                {% set fid = 'svc' ~ s.id %}
+                <tr class="{{ s.archived ? 'opacity-50' }}">
+                    <td><input form="{{ fid }}" name="name" class="form-control form-control-sm" value="{{ s.name }}"></td>
+                    <td><div class="input-group input-group-sm" style="width:130px"><span class="input-group-text">$</span><input form="{{ fid }}" name="rate" class="form-control" value="{{ s.rate }}" inputmode="decimal"></div></td>
+                    <td><input form="{{ fid }}" type="checkbox" name="billable" value="1" class="form-check-input" {{ s.billable ? 'checked' }}></td>
+                    <td class="small">{{ s.seconds|hours }}</td>
+                    <td class="text-end text-nowrap"><label class="form-check form-check-inline small mb-0"><input form="{{ fid }}" type="checkbox" name="archived" value="1" class="form-check-input" {{ s.archived ? 'checked' }}> Archived</label><button form="{{ fid }}" class="btn btn-sm btn-light">Save</button></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% for s in data.all_services %}<form method="post" id="svc{{ s.id }}">{{ csrf_field() }}<input type="hidden" name="action" value="service-save"><input type="hidden" name="id" value="{{ s.id }}"></form>{% endfor %}
+        <div class="card-body border-top">
+            <form method="post" class="d-flex gap-2">{{ csrf_field() }}<input type="hidden" name="action" value="service-save"><input type="hidden" name="billable" value="1">
+                <input name="name" class="form-control" placeholder="New service, e.g. SEO" required>
+                <div class="input-group" style="width:160px"><span class="input-group-text">$</span><input name="rate" class="form-control" placeholder="rate" inputmode="decimal"></div>
+                <button class="btn btn-primary text-nowrap">Add service</button></form>
+        </div>
+    </div>
+</div></div>
+{% endblock %}

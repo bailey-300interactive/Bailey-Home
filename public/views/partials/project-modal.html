@@ -1,0 +1,49 @@
+<div class="modal fade" id="projectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" method="post" id="projectForm">
+            {{ csrf_field() }}<input type="hidden" name="action" value="project-save"><input type="hidden" name="id">
+            <div class="modal-header"><h5 class="modal-title">Project</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body"><div class="row g-2">
+                <div class="col-12"><label class="form-label">Client</label><select name="client_id" class="form-select" required>{% for c in data.client_options %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
+                <div class="col-9"><label class="form-label">Project name</label><input name="name" class="form-control" required placeholder="Website redesign, Monthly support…"></div>
+                <div class="col-3"><label class="form-label">Color</label><input type="color" name="color" class="form-control form-control-color w-100" value="#3b7ddd"></div>
+                <div class="col-12"><label class="form-label">How is it billed?</label><select name="billing" class="form-select">{% for k, v in data.billing %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+                <div class="col-6 b-rate"><label class="form-label">Hourly rate</label><div class="input-group"><span class="input-group-text">$</span><input name="rate" class="form-control" inputmode="decimal"></div></div>
+                <div class="col-6 b-flat hidden"><label class="form-label">Flat fee</label><div class="input-group"><span class="input-group-text">$</span><input name="flat_fee" class="form-control" inputmode="decimal"></div></div>
+                <div class="col-6"><label class="form-label">Due date</label><input type="date" name="due_date" class="form-control"></div>
+                <div class="col-6"><label class="form-label">Budget (hours)</label><input name="budget_hours" class="form-control" inputmode="decimal"></div>
+                <div class="col-6"><label class="form-label">or budget ($)</label><input name="budget_amount" class="form-control" inputmode="decimal"></div>
+                <div class="col-12"><label class="form-label">Description</label><textarea name="description" class="form-control" rows="2"></textarea></div>
+                <div class="col-6"><label class="form-label">Status</label><select name="status" class="form-select"><option value="active">Active</option><option value="completed">Completed</option><option value="archived">Archived</option></select></div>
+                <div class="col-12 small text-muted b-help"></div>
+            </div></div>
+            <div class="modal-footer">
+                <button type="submit" form="projectDelete" class="btn btn-outline-danger me-auto js-proj-del hidden">Delete</button>
+                <button class="btn btn-primary">Save project</button>
+            </div>
+        </form>
+        <form method="post" id="projectDelete" data-confirm="Delete this project? Only works if it has no time.">{{ csrf_field() }}<input type="hidden" name="action" value="project-delete"><input type="hidden" name="id"></form>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const help = {
+        hourly_project: 'Every hour on this project bills at the rate above.',
+        hourly_service: 'Each entry bills at its service\'s rate (set rates on the Services page). The rate above is used when there\'s no service.',
+        hourly_user: 'Each entry bills at the rate of the person who logged it (set on their profile).',
+        flat_fee: 'One fixed price. Time is still tracked so you can see your effective hourly rate.',
+        non_billable: 'Internal work. Time is tracked but never billed.'
+    };
+    const f = document.getElementById('projectForm');
+    const billing = () => { const b = f.billing.value; $('.b-rate').toggleClass('hidden', b === 'flat_fee' || b === 'non_billable'); $('.b-flat').toggleClass('hidden', b !== 'flat_fee'); $('.b-help').text(help[b]); };
+    $(f.billing).on('change', billing);
+    $(document).on('click', '.js-project', function () {
+        const p = $(this).data('project') || {};
+        f.reset(); f.id.value = p.id || '';
+        ['client_id', 'name', 'color', 'billing', 'rate', 'flat_fee', 'due_date', 'budget_hours', 'budget_amount', 'description', 'status'].forEach(k => { if (p[k] != null) f[k].value = p[k]; });
+        $('#projectDelete [name=id]').val(p.id || ''); $('.js-proj-del').toggleClass('hidden', !p.id);
+        billing();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('projectModal')).show();
+    });
+});
+</script>

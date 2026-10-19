@@ -1,0 +1,18 @@
+{
+    "name": "bailey/php-mailer",
+    "description": "Php Mailer for framework",
+    "autoload": {
+        "psr-4": {
+            "Bailey\\PhpMailer\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Bailey Rotellini",
+            "email": "baileyrotellini1998@gmail.com"
+        }
+    ],
+    "require": {
+        "phpmailer/phpmailer": "^6.8"
+    }
+}

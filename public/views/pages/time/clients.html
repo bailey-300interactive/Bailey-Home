@@ -1,0 +1,40 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Clients</h1><div class="sub">{{ data.clients|length }} clients · <span class="text-body fw-600">{{ data.totals.unbilled|money }}</span> unbilled · <span class="text-body fw-600">{{ data.totals.outstanding|money }}</span> owed to you</div></div>
+    <div class="actions">
+        <div class="seg"><a href="?show=active" class="{{ data.show != 'all' ? 'active' }}">Active</a><a href="?show=all" class="{{ data.show == 'all' ? 'active' }}">All</a></div>
+        <button class="btn btn-primary js-client" data-client='{}'><i data-feather="plus"></i> New client</button>
+    </div>
+</div>
+
+<div class="card card-flush">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Client</th><th class="d-none d-md-table-cell">Contact</th><th class="text-end">Projects</th><th class="text-end">Hours</th><th class="text-end">Unbilled</th><th class="text-end">Owed</th><th class="text-end d-none d-lg-table-cell">Collected</th></tr></thead>
+            <tbody>
+            {% for c in data.clients %}
+                <tr data-href="/time/client/{{ c.id }}" class="cursor-pointer {{ c.archived ? 'opacity-50' }}">
+                    <td><div class="d-flex align-items-center gap-2">
+                        <span class="avatar-initials" style="background:{{ c.color ?: '#3b7ddd' }};border-radius:9px">{{ c.name|initials }}</span>
+                        <div><div class="fw-600">{{ c.name }}</div><div class="small-muted">{{ c.last_tracked ? 'Last tracked ' ~ c.last_tracked|relday : 'No time yet' }}</div></div>
+                    </div></td>
+                    <td class="d-none d-md-table-cell small">{{ c.contact_first }} {{ c.contact_last }}<div class="text-muted">{{ c.email }}</div></td>
+                    <td class="text-end">{{ c.active_projects }}</td>
+                    <td class="text-end">{{ c.seconds|hours }}</td>
+                    <td class="text-end money {{ c.unbilled > 0 ? 'fw-600' : 'text-muted' }}">{{ c.unbilled|money }}</td>
+                    <td class="text-end money {{ c.outstanding > 0 ? 'fw-600 text-danger' : 'text-muted' }}">{{ c.outstanding|money }}</td>
+                    <td class="text-end money d-none d-lg-table-cell text-muted">{{ c.collected|money }}</td>
+                </tr>
+            {% else %}
+                <tr><td colspan="7"><div class="empty"><div class="big">💼</div>No clients yet. Add one, then a project, then start tracking.</div></td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% include 'partials/client-modal.html' %}
+{% endblock %}
+{% block scripts %}
+{% if data.new %}<script>$(function () { $('.js-client').first().trigger('click'); });</script>{% endif %}
+{% endblock %}

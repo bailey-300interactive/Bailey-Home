@@ -1,0 +1,94 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Import transactions</h1><div class="sub">From a bank or card CSV. Duplicates are spotted and left out, and your rules pick the categories.</div></div>
+</div>
+
+{% if data.step == 'upload' %}
+<div class="row"><div class="col-lg-7">
+    <div class="card"><div class="card-body p-4">
+        {% if data.accounts is empty %}
+            <p>Add an account first. <a href="/money/accounts?new=1">Add account</a></p>
+        {% else %}
+        <form method="post" enctype="multipart/form-data">
+            {{ csrf_field() }}<input type="hidden" name="action" value="import-upload">
+            <div class="mb-3"><label class="form-label">Into account</label><select name="account_id" class="form-select form-select-lg">{% for a in data.accounts %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select></div>
+            <div class="mb-3"><label class="form-label">CSV file</label><input type="file" name="file" accept=".csv,text/csv" class="form-control form-control-lg" required></div>
+            <button class="btn btn-primary">Next: match the columns</button>
+        </form>
+        {% endif %}
+    </div></div>
+</div><div class="col-lg-5">
+    <div class="card"><div class="card-body small text-muted">
+        Most banks have <strong>Download</strong> or <strong>Export</strong> on the account activity page. Choose CSV (sometimes called "Comma delimited" or "Excel"). Chase, Bank of America, Capital One, Amex, Citi, Discover, PNC, Wells Fargo and most credit unions work.
+    </div></div>
+</div></div>
+{% endif %}
+
+{% if data.step == 'map' %}
+<form method="post">
+    {{ csrf_field() }}<input type="hidden" name="action" value="import-map">
+    <div class="card">
+        <div class="card-header d-flex align-items-center"><h5 class="card-title">{{ data.imp.name }}: which column is which?</h5></div>
+        <div class="card-body">
+            <div class="row g-3 mb-3">
+                <div class="col-md-4"><label class="form-label">Into account</label><select name="account_id" class="form-select">{% for a in data.accounts %}<option value="{{ a.id }}" {{ a.id == data.imp.account_id ? 'selected' }}>{{ a.name }}</option>{% endfor %}</select></div>
+                {% for key, label in {'date': 'Date', 'payee': 'Description / payee', 'amount': 'Amount (one column)', 'debit': 'Or: money out column', 'credit': 'Or: money in column', 'memo': 'Memo (optional)'} %}
+                    <div class="col-md-4"><label class="form-label">{{ label }}</label>
+                        <select name="map[{{ key }}]" class="form-select"><option value="">—</option>{% for i, h in data.header %}<option value="{{ i }}" {{ data.guess[key] is not null and data.guess[key] is not same as('') and data.guess[key] == i ? 'selected' }}>{{ h ?: 'Column ' ~ (i + 1) }}</option>{% endfor %}</select></div>
+                {% endfor %}
+            </div>
+            <label class="form-check"><input type="checkbox" name="header" value="1" class="form-check-input" checked> <span class="form-check-label">The first row is column names</span></label>
+            <label class="form-check"><input type="checkbox" name="flip" value="1" class="form-check-input" {{ data.imp.flip ? 'checked' }}> <span class="form-check-label">Spending shows as positive numbers in this file (common for credit cards)</span></label>
+        </div>
+        <div class="table-responsive border-top"><table class="table table-sm mb-0">
+            <thead><tr>{% for h in data.header %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+            <tbody>{% for r in data.sample %}<tr>{% for c in r %}<td class="small truncate" style="max-width:220px">{{ c }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+        </table></div>
+        <div class="card-footer d-flex">
+            <button type="submit" form="cancelImport" class="btn btn-link">Cancel</button>
+            <button class="btn btn-primary ms-auto">Next: review</button>
+        </div>
+    </div>
+</form>
+<form method="post" id="cancelImport">{{ csrf_field() }}<input type="hidden" name="action" value="import-cancel"></form>
+{% endif %}
+
+{% if data.step == 'review' %}
+{% set fresh = data.prepared|filter(t => not t.duplicate) %}
+<form method="post">
+    {{ csrf_field() }}<input type="hidden" name="action" value="import-commit">
+    <div class="card card-flush">
+        <div class="card-header d-flex align-items-center flex-wrap gap-2">
+            <h5 class="card-title">{{ data.prepared|length }} rows → {{ data.account_name }}</h5>
+            <span class="small-muted">{{ fresh|length }} new · {{ data.prepared|length - fresh|length }} already in Home (unticked)</span>
+            <a href="/money/import" class="btn btn-link btn-sm ms-auto">Back</a>
+        </div>
+        <div class="table-responsive"><table class="table table-sm table-hover mb-0">
+            <thead><tr><th><input type="checkbox" class="form-check-input" id="takeAll" checked></th><th>Date</th><th>Payee</th><th>Category</th><th class="text-end">Amount</th></tr></thead>
+            <tbody>
+            {% for t in data.prepared %}
+                <tr class="{{ t.duplicate ? 'opacity-50' }}">
+                    <td><input type="checkbox" name="take[]" value="{{ t.i }}" class="form-check-input js-take" {{ t.duplicate ? '' : 'checked' }}></td>
+                    <td class="small text-nowrap">{{ t.date|nicedate('M j, Y') }}</td>
+                    <td><input name="payee[{{ t.i }}]" value="{{ t.payee }}" class="form-control form-control-sm" style="min-width:180px">{% if t.original != t.payee %}<div class="small-muted truncate" style="max-width:280px">{{ t.original }}</div>{% endif %}{% if t.duplicate %}<span class="chip chip-amber">Already imported</span>{% endif %}</td>
+                    <td><select name="cat[{{ t.i }}]" class="form-select form-select-sm" style="min-width:170px"><option value="">Uncategorized</option>{% for c in data.categories %}<option value="{{ c.id }}" {{ c.id == t.category_id ? 'selected' }}>{{ c.icon }} {{ c.name }}</option>{% endfor %}</select></td>
+                    <td class="text-end money fw-600 {{ t.amount > 0 ? 'pos' }}">{{ t.amount|money(null, true) }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table></div>
+        <div class="card-footer d-flex align-items-center">
+            <span class="small-muted">Tip: after importing, set a rule in <a href="/money/categories">Categories & rules</a> so next time is automatic.</span>
+            <button class="btn btn-primary ms-auto">Import <span id="takeN">{{ fresh|length }}</span> transactions</button>
+        </div>
+    </div>
+</form>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+$('#takeAll').on('change', function () { $('.js-take').prop('checked', this.checked).trigger('change'); });
+$(document).on('change', '.js-take', () => $('#takeN').text($('.js-take:checked').length));
+</script>
+{% endblock %}

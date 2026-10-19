@@ -1,0 +1,133 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Bills & subscriptions</h1><div class="sub">About {{ data.monthly|money }} a month in bills, {{ data.subs|money }} of it subscriptions ({{ (data.subs * 12)|money }} a year).</div></div>
+    <div class="actions"><button class="btn btn-primary js-bill" data-bill='{}'><i data-feather="plus"></i> Add bill</button></div>
+</div>
+
+<div class="row">
+    <div class="col-xl-8">
+        <div class="card card-flush">
+            {% for b in data.bills %}
+                <div class="list-row {{ not b.active ? 'opacity-50' }}">
+                    <div class="bill-day {{ b.active and b.days < 0 ? 'late' : (b.active and b.days <= b.remind_days ? 'soon') }}"><div class="m">{{ b.next_due|date('M') }}</div><div class="d">{{ b.next_due|date('j') }}</div></div>
+                    <div class="grow cursor-pointer js-bill" data-bill="{{ b|json_encode }}">
+                        <div class="title">{{ b.category_icon }} {{ b.name }}
+                            {% if b.is_subscription %}<span class="chip chip-purple">Subscription</span>{% endif %}
+                            {% if b.autopay %}<span class="chip chip-green">Autopay</span>{% endif %}
+                            {% if not b.active %}<span class="chip">Paused</span>{% endif %}
+                        </div>
+                        <div class="meta">
+                            <span>{{ data.frequencies[b.frequency] }}</span>
+                            {% if b.active %}<span class="{{ b.days < 0 ? 'text-danger fw-600' }}">{{ b.days < 0 ? (b.days|abs) ~ (b.days == -1 ? ' day late' : ' days late') : (b.days == 0 ? 'Due today' : 'Due ' ~ (b.next_due|relday)) }}</span>{% endif %}
+                            {% if b.account_name %}<span>from {{ b.account_name }}</span>{% endif %}
+                            {% if b.last_paid %}<span>paid {{ b.last_paid|nicedate('M j') }}</span>{% endif %}
+                        </div>
+                    </div>
+                    <div class="text-end me-2"><div class="money fw-600">{{ b.variable_amount ? '~' }}{{ b.amount|money }}</div>{% if b.frequency != 'monthly' %}<div class="small-muted">{{ b.monthly|money }}/mo</div>{% endif %}</div>
+                    {% if b.active %}
+                        <button class="btn btn-light btn-sm js-pay" data-bill="{{ b|json_encode }}"><i data-feather="check"></i> Paid</button>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="empty"><div class="big">🧾</div>Add rent, utilities, insurance and subscriptions to see what's due and get reminded.</div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="col-xl-4">
+        {% if data.suggested %}
+            <div class="card card-flush">
+                <div class="card-header"><h5 class="card-title">Looks like a subscription</h5><div class="small-muted">Charged every month for 3+ months</div></div>
+                {% for s in data.suggested %}
+                    <div class="list-row">
+                        <div class="grow"><div class="title">{{ s.payee }}</div><div class="meta">~{{ s.avg_amount|money }} · last {{ s.last_date|nicedate('M j') }}</div></div>
+                        <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="bill-from-suggestion"><input type="hidden" name="name" value="{{ s.payee }}"><input type="hidden" name="amount" value="{{ s.avg_amount }}"><input type="hidden" name="next_due" value="{{ s.next_due }}"><input type="hidden" name="category_id" value="{{ s.category_id }}"><input type="hidden" name="account_id" value="{{ s.account_id }}"><button class="btn btn-light btn-sm">+ Add</button></form>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+        <div class="card"><div class="card-body small text-muted">
+            <strong class="text-body">How bills work</strong><br>
+            Bills show up on Reminders and the dashboard as their date gets close, and in the morning email. <strong>Paid</strong> records the expense in Money and moves the bill to its next date. Autopay bills still get marked paid so your balances stay right.
+        </div></div>
+    </div>
+</div>
+
+{# ---- Bill modal ---- #}
+<div class="modal fade" id="billModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" method="post" id="billForm">
+            {{ csrf_field() }}<input type="hidden" name="action" value="bill-save"><input type="hidden" name="id">
+            <div class="modal-header"><h5 class="modal-title">Bill</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="row g-2">
+                    <div class="col-7"><label class="form-label">Name</label><input name="name" class="form-control" required placeholder="Electric, Netflix, Mortgage…"></div>
+                    <div class="col-5"><label class="form-label">Amount</label><input name="amount" class="form-control input-money" inputmode="decimal"></div>
+                    <div class="col-6"><label class="form-label">How often</label><select name="frequency" class="form-select">{% for k, v in data.frequencies %}<option value="{{ k }}" {{ k == 'monthly' ? 'selected' }}>{{ v }}</option>{% endfor %}</select></div>
+                    <div class="col-6"><label class="form-label">Next due</label><input type="date" name="next_due" class="form-control" value="{{ base.today }}" required></div>
+                    <div class="col-6"><label class="form-label">Paid from</label><select name="account_id" class="form-select"><option value="">—</option>{% for a in data.accounts %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select></div>
+                    <div class="col-6"><label class="form-label">Category</label><select name="category_id" class="form-select"><option value="">—</option>{% for c in data.categories|filter(c => c.kind == 'expense') %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}</select></div>
+                    <div class="col-6"><label class="form-label">Remind me</label><select name="remind_days" class="form-select">{% for d in [0, 1, 2, 3, 5, 7, 14] %}<option value="{{ d }}" {{ d == 3 ? 'selected' }}>{{ d == 0 ? 'On the day' : d ~ ' day' ~ (d > 1 ? 's') ~ ' before' }}</option>{% endfor %}</select></div>
+                    <div class="col-6"><label class="form-label">Status</label><select name="active" class="form-select"><option value="1">Active</option><option value="0">Paused / cancelled</option></select></div>
+                    <div class="col-12"><label class="form-label">Website to pay</label><input name="url" class="form-control" placeholder="https://"></div>
+                    <div class="col-12"><label class="form-label">Notes</label><input name="notes" class="form-control"></div>
+                    <div class="col-12 d-flex flex-wrap gap-3 mt-2">
+                        <label class="form-check"><input type="checkbox" name="is_subscription" value="1" class="form-check-input"> <span class="form-check-label">Subscription</span></label>
+                        <label class="form-check"><input type="checkbox" name="autopay" value="1" class="form-check-input"> <span class="form-check-label">Autopay</span></label>
+                        <label class="form-check"><input type="checkbox" name="variable_amount" value="1" class="form-check-input"> <span class="form-check-label">Amount changes</span></label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" form="billDelete" class="btn btn-outline-danger me-auto js-bill-del hidden">Delete</button>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary">Save</button>
+            </div>
+        </form>
+        <form method="post" id="billDelete" data-confirm="Delete this bill?">{{ csrf_field() }}<input type="hidden" name="action" value="bill-delete"><input type="hidden" name="id"></form>
+    </div>
+</div>
+
+{# ---- Pay modal ---- #}
+<div class="modal fade" id="payModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <form class="modal-content" method="post">
+            {{ csrf_field() }}<input type="hidden" name="action" value="bill-pay"><input type="hidden" name="id">
+            <div class="modal-header"><h5 class="modal-title">Mark paid</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-2"><label class="form-label">Amount</label><input name="amount" class="form-control form-control-lg input-money" inputmode="decimal"></div>
+                <div class="mb-2"><label class="form-label">Date paid</label><input type="date" name="date" class="form-control" value="{{ base.today }}"></div>
+                <div class="mb-2"><label class="form-label">From</label><select name="account_id" class="form-select">{% for a in data.accounts %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select></div>
+                <label class="form-check"><input type="checkbox" name="record" value="1" class="form-check-input" checked> <span class="form-check-label">Add it to transactions</span></label>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" form="skipForm" class="btn btn-link me-auto">Skip this one</button>
+                <button class="btn btn-primary">Paid</button>
+            </div>
+        </form>
+        <form method="post" id="skipForm">{{ csrf_field() }}<input type="hidden" name="action" value="bill-skip"><input type="hidden" name="id"></form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).on('click', '.js-bill', function () {
+    const b = $(this).data('bill') || {}, f = $('#billForm')[0];
+    f.reset(); f.id.value = b.id || '';
+    ['name', 'amount', 'frequency', 'next_due', 'account_id', 'category_id', 'remind_days', 'url', 'notes', 'active'].forEach(k => { if (b[k] !== undefined && b[k] !== null) f[k].value = b[k]; });
+    ['is_subscription', 'autopay', 'variable_amount'].forEach(k => f[k].checked = b[k] == 1);
+    $('#billDelete [name=id]').val(b.id || ''); $('.js-bill-del').toggleClass('hidden', !b.id);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('billModal')).show();
+});
+function openPay(b) {
+    const f = $('#payModal form')[0];
+    f.id.value = b.id; f.amount.value = b.amount; if (b.account_id) f.account_id.value = b.account_id;
+    $('#skipForm [name=id]').val(b.id);
+    $('#payModal .modal-title').text('Mark ' + b.name + ' paid');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('payModal')).show();
+}
+$(document).on('click', '.js-pay', function () { openPay($(this).data('bill')); });
+{% if data.pay %}{% for b in data.bills|filter(b => b.id == data.pay) %}openPay({{ b|js }});{% endfor %}{% endif %}
+</script>
+{% endblock %}

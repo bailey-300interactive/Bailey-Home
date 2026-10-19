@@ -1,0 +1,73 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Password generator</h1><div class="sub">Made in your browser with its secure random generator. Nothing is saved or sent.</div></div>
+</div>
+<div class="row justify-content-center">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-body p-4">
+                <div class="seg mb-3" id="mode">
+                    <button type="button" class="active" data-mode="random">Random</button>
+                    <button type="button" data-mode="words">Words (easy to type)</button>
+                    <button type="button" data-mode="pin">PIN</button>
+                </div>
+                <div class="gen-out mb-2" id="out"></div>
+                <div class="d-flex align-items-center gap-2 mb-4">
+                    <div class="strength" id="genMeter" style="width:160px;margin:0"><span></span><span></span><span></span><span></span><span></span></div>
+                    <span class="small-muted" id="genLabel"></span>
+                    <button class="btn btn-light ms-auto" id="regen"><i data-feather="refresh-cw"></i> New</button>
+                    <button class="btn btn-primary" id="copy"><i data-feather="copy"></i> Copy</button>
+                </div>
+                <div class="row g-3" id="opts-random">
+                    <div class="col-12"><label class="form-label d-flex">Length <span class="ms-auto fw-bold" id="lenV">20</span></label><input type="range" class="form-range" id="len" min="8" max="64" value="20"></div>
+                    <div class="col-auto"><label class="form-check"><input type="checkbox" class="form-check-input" id="upper" checked> <span class="form-check-label">A–Z</span></label></div>
+                    <div class="col-auto"><label class="form-check"><input type="checkbox" class="form-check-input" id="digits" checked> <span class="form-check-label">0–9</span></label></div>
+                    <div class="col-auto"><label class="form-check"><input type="checkbox" class="form-check-input" id="symbols" checked> <span class="form-check-label">!@#$</span></label></div>
+                </div>
+                <div class="row g-3 hidden" id="opts-words">
+                    <div class="col-12"><label class="form-label d-flex">Words <span class="ms-auto fw-bold" id="wordsV">5</span></label><input type="range" class="form-range" id="words" min="3" max="10" value="5"></div>
+                    <div class="col-auto"><label class="form-label">Separator</label><select id="sep" class="form-select form-select-sm"><option value="-">dash -</option><option value=".">dot .</option><option value=" ">space</option><option value="_">underscore _</option><option value="">none</option></select></div>
+                    <div class="col-auto d-flex align-items-end"><label class="form-check"><input type="checkbox" class="form-check-input" id="cap"> <span class="form-check-label">Capitalize</span></label></div>
+                    <div class="col-auto d-flex align-items-end"><label class="form-check"><input type="checkbox" class="form-check-input" id="num" checked> <span class="form-check-label">Add a number</span></label></div>
+                </div>
+                <div class="row g-3 hidden" id="opts-pin">
+                    <div class="col-12"><label class="form-label d-flex">Digits <span class="ms-auto fw-bold" id="pinV">6</span></label><input type="range" class="form-range" id="pinLen" min="4" max="12" value="6"></div>
+                </div>
+            </div>
+        </div>
+        <div class="card"><div class="card-body small text-muted">
+            <strong>Which kind?</strong> Random is best for sites where the vault fills it in. Words are best for anything you type by hand, like a master password or Wi-Fi: 5 random words is stronger than most 12-character passwords and much easier to type on an iPad.
+        </div></div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/public/vendor/eff-words.js"></script>
+<script src="/public/assets/js/vault.js?v=1"></script>
+<script>
+let mode = 'random';
+function gen() {
+    let pw;
+    if (mode === 'words') pw = passphrase(+$('#words').val(), $('#sep').val(), $('#cap').is(':checked'), $('#num').is(':checked'));
+    else if (mode === 'pin') { pw = ''; for (let i = 0; i < +$('#pinLen').val(); i++) pw += randInt(10); }
+    else pw = generatePassword(+$('#len').val(), { upper: $('#upper').is(':checked'), digits: $('#digits').is(':checked'), symbols: $('#symbols').is(':checked') });
+    $('#out').html(colorize(pw)).data('pw', pw);
+    const bits = mode === 'words' ? Math.round(+$('#words').val() * Math.log2(7776)) : null;
+    const s = mode === 'words' ? (bits >= 64 ? 4 : bits >= 50 ? 3 : 2) : strength(pw);
+    meter('#genMeter', pw); $('#genMeter').attr('class', 'strength s' + s);
+    $('#genLabel').text(STRENGTH_LABEL[s] + (bits ? ' · ' + bits + ' bits' : ''));
+}
+$('#mode button').on('click', function () {
+    mode = $(this).data('mode'); $('#mode button').removeClass('active'); $(this).addClass('active');
+    $('[id^=opts-]').addClass('hidden'); $('#opts-' + mode).removeClass('hidden'); gen();
+});
+$('#len').on('input', function () { $('#lenV').text(this.value); gen(); });
+$('#words').on('input', function () { $('#wordsV').text(this.value); gen(); });
+$('#pinLen').on('input', function () { $('#pinV').text(this.value); gen(); });
+$('#upper,#digits,#symbols,#sep,#cap,#num').on('change', gen);
+$('#regen').on('click', gen);
+$('#copy').on('click', () => copyText($('#out').data('pw'), 'Password'));
+gen();
+</script>
+{% endblock %}

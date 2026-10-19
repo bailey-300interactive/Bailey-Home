@@ -1,0 +1,56 @@
+{# The invoice as the client sees it. Needs inv, company #}
+<div class="invoice-paper">
+    <div class="d-flex flex-wrap justify-content-between gap-4 mb-5">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-2"><span class="brand-mark" style="width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(135deg,#4f8ff0,#7a5af8);color:#fff;font-weight:700;font-size:.85rem">{{ (company.name ?: 'Home')|initials }}</span><h2 class="mb-0 h4">{{ company.name }}</h2></div>
+            <div class="small text-muted" style="white-space:pre-line">{{ company.address }}</div>
+            <div class="small text-muted">{{ company.email }}{{ company.email and company.phone ? ' · ' }}{{ company.phone }}</div>
+        </div>
+        <div class="text-end">
+            <h2 class="mb-1" style="letter-spacing:.02em">INVOICE</h2>
+            <div class="fw-600">{{ inv.number }}</div>
+            {% if inv.status == 'paid' %}<div class="stamp mt-2" style="color:#10845f">Paid</div>{% elseif inv.status == 'void' %}<div class="stamp mt-2" style="color:#8a939c">Void</div>{% elseif inv.overdue %}<div class="stamp mt-2" style="color:#c22738">Overdue</div>{% endif %}
+        </div>
+    </div>
+    <div class="row mb-4 g-3">
+        <div class="col-sm-6">
+            <div class="lbl mb-1">Bill to</div>
+            <div class="fw-600">{{ inv.client_name }}</div>
+            {% if inv.contact_first %}<div>{{ inv.contact_first }} {{ inv.contact_last }}</div>{% endif %}
+            {% if inv.address1 %}<div class="small">{{ inv.address1 }}{% if inv.address2 %}, {{ inv.address2 }}{% endif %}<br>{{ inv.city }}{{ inv.city and inv.state ? ', ' }}{{ inv.state }} {{ inv.zip }}</div>{% endif %}
+            {% if inv.client_email %}<div class="small text-muted">{{ inv.client_email }}</div>{% endif %}
+        </div>
+        <div class="col-sm-6">
+            <div class="row g-2 text-sm-end">
+                <div class="col-6 col-sm-12"><div class="lbl">Issued</div><div>{{ inv.issue_date|nicedate('F j, Y') }}</div></div>
+                <div class="col-6 col-sm-12"><div class="lbl">Due</div><div class="{{ inv.overdue ? 'text-danger fw-600' }}">{{ inv.due_date ? inv.due_date|nicedate('F j, Y') : 'On receipt' }}</div></div>
+                {% if inv.po_number %}<div class="col-6 col-sm-12"><div class="lbl">PO</div><div>{{ inv.po_number }}</div></div>{% endif %}
+            </div>
+        </div>
+    </div>
+    {% if inv.title %}<h5 class="mb-3">{{ inv.title }}</h5>{% endif %}
+    <table class="table mb-4">
+        <thead><tr><th>Description</th><th class="text-end" style="width:90px">{{ inv.lines|filter(l => l.kind == 'time')|length ? 'Hours / qty' : 'Qty' }}</th><th class="text-end" style="width:110px">Rate</th><th class="text-end" style="width:120px">Amount</th></tr></thead>
+        <tbody>
+        {% for l in inv.lines %}
+            <tr><td style="white-space:pre-line">{{ l.description }}</td><td class="text-end">{{ l.quantity|number_format(2)|replace({'.00': ''}) }}</td><td class="text-end money">{{ l.rate|money(inv.currency) }}</td><td class="text-end money">{{ l.amount|money(inv.currency) }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <div class="d-flex justify-content-end">
+        <table class="totals" style="min-width:280px">
+            <tr><td>Subtotal</td><td class="text-end money">{{ inv.subtotal|money(inv.currency) }}</td></tr>
+            {% if inv.discount > 0 %}<tr><td>Discount ({{ inv.discount_pct + 0 }}%)</td><td class="text-end money">-{{ inv.discount|money(inv.currency) }}</td></tr>{% endif %}
+            {% if inv.tax > 0 %}<tr><td>{{ inv.tax_name ?: 'Tax' }} ({{ inv.tax_rate + 0 }}%)</td><td class="text-end money">{{ inv.tax|money(inv.currency) }}</td></tr>{% endif %}
+            <tr class="border-top"><td class="fw-600">Total</td><td class="text-end money fw-600">{{ inv.total|money(inv.currency) }}</td></tr>
+            {% if inv.paid > 0 %}<tr><td>Paid</td><td class="text-end money">-{{ inv.paid|money(inv.currency) }}</td></tr>{% endif %}
+            <tr><td class="grand pt-2">Amount due</td><td class="text-end money grand pt-2">{{ (inv.status == 'void' ? 0 : inv.balance)|money(inv.currency) }}</td></tr>
+        </table>
+    </div>
+    {% if inv.notes or inv.terms or company.pay %}
+        <div class="row mt-5 g-4 small">
+            {% if inv.notes %}<div class="col-md-6"><div class="lbl mb-1">Notes</div><div style="white-space:pre-line">{{ inv.notes }}</div></div>{% endif %}
+            {% if inv.terms or company.pay %}<div class="col-md-6"><div class="lbl mb-1">Terms & payment</div><div style="white-space:pre-line">{{ inv.terms }}{{ inv.terms and company.pay ? "\n\n" }}{{ company.pay }}</div></div>{% endif %}
+        </div>
+    {% endif %}
+</div>

@@ -1,0 +1,121 @@
+{% extends "bases/base-admin.html" %}
+{% set u = data.user %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Profile</h1><div class="sub">Your details, sign-in security and notifications.</div></div>
+</div>
+
+<div class="row">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header"><h5 class="card-title">Details</h5></div>
+            <div class="card-body">
+                <form method="post">
+                    {{ csrf_field() }}<input type="hidden" name="action" value="details">
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label">First name</label><input name="first_name" class="form-control" value="{{ u.first_name }}" required></div>
+                        <div class="col-md-6"><label class="form-label">Last name</label><input name="last_name" class="form-control" value="{{ u.last_name }}"></div>
+                        <div class="col-md-6"><label class="form-label">Email (sign-in)</label><input name="email" type="email" class="form-control" value="{{ u.email ?: u.username }}" required></div>
+                        <div class="col-md-6"><label class="form-label">Title</label><input name="title" class="form-control" value="{{ u.title }}"></div>
+                        <div class="col-md-6">
+                            <label class="form-label">Time zone</label>
+                            <select name="timezone" class="form-select">
+                                <option value="">Site default ({{ setting('timezone') }})</option>
+                                {% for tz in data.timezones %}<option {{ tz == u.timezone ? 'selected' }}>{{ tz }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Theme</label>
+                            <select name="site_theme" class="form-select">
+                                <option value="default" {{ u.site_theme != 'dark' ? 'selected' }}>Light</option>
+                                <option value="dark" {{ u.site_theme == 'dark' ? 'selected' }}>Dark</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Your hourly rate</label>
+                            <div class="input-group"><span class="input-group-text">$</span><input name="hourly_rate" class="form-control" value="{{ u.hourly_rate }}" inputmode="decimal"></div>
+                            <div class="form-text">Used by projects billed "by team member rate".</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Weekly hours goal</label>
+                            <input name="weekly_hours_goal" class="form-control" value="{{ u.weekly_hours_goal }}" inputmode="decimal">
+                            <div class="form-text">Shown on the dashboard.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-check"><input type="checkbox" class="form-check-input" name="notify_reminders" value="1" {{ u.notify_reminders ? 'checked' }}> <span class="form-check-label">Email me when a reminder with a time is due</span></label>
+                            <label class="form-check"><input type="checkbox" class="form-check-input" name="notify_digest" value="1" {{ u.notify_digest ? 'checked' }}> <span class="form-check-label">Morning email with what's due today (reminders, bills, invoices)</span></label>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary mt-3">Save</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header"><h5 class="card-title">Login password</h5></div>
+            <div class="card-body">
+                <form method="post">
+                    {{ csrf_field() }}<input type="hidden" name="action" value="password">
+                    <div class="mb-2"><label class="form-label">Current password</label><input type="password" name="current" class="form-control" autocomplete="current-password" required></div>
+                    <div class="mb-2"><label class="form-label">New password</label><input type="password" name="new" class="form-control" autocomplete="new-password" minlength="12" required></div>
+                    <div class="mb-3"><label class="form-label">Type it again</label><input type="password" name="new2" class="form-control" autocomplete="new-password" required></div>
+                    <button class="btn btn-light">Change password</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">Two-step verification</h5>
+                {% if u.totp_enabled %}<span class="chip chip-green ms-auto">On</span>{% else %}<span class="chip chip-amber ms-auto">Off</span>{% endif %}
+            </div>
+            <div class="card-body">
+                {% if data.totp_setup %}
+                    <p class="small">Scan this with Google Authenticator, 1Password, Authy or your phone's Passwords app, then type the 6-digit code it shows.</p>
+                    <div class="text-center mb-2"><div id="qr" class="d-inline-block p-2 bg-white rounded"></div></div>
+                    <div class="small-muted text-center mb-3">Or enter the key: <code class="k">{{ data.totp_setup|split('', 4)|join(' ') }}</code></div>
+                    <form method="post" class="d-flex gap-2">
+                        {{ csrf_field() }}<input type="hidden" name="action" value="2fa-confirm">
+                        <input name="code" class="form-control otp" inputmode="numeric" placeholder="123456" maxlength="7" autocomplete="one-time-code" required>
+                        <button class="btn btn-primary">Turn on</button>
+                    </form>
+                    <form method="post" class="mt-2">{{ csrf_field() }}<input type="hidden" name="action" value="2fa-cancel"><button class="btn btn-link btn-sm p-0">Cancel</button></form>
+                {% elseif u.totp_enabled %}
+                    <p class="small text-muted">Signing in asks for a code from your authenticator app after your password.</p>
+                    <form method="post" class="d-flex gap-2" data-confirm="Turn off two-step verification?">
+                        {{ csrf_field() }}<input type="hidden" name="action" value="2fa-off">
+                        <input type="password" name="current" class="form-control" placeholder="Login password" required>
+                        <button class="btn btn-outline-danger text-nowrap">Turn off</button>
+                    </form>
+                {% else %}
+                    <p class="small text-muted">This site holds your passwords and money. Add a second step to signing in.</p>
+                    <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="2fa-start"><button class="btn btn-primary">Set up two-step verification</button></form>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h5 class="card-title">Vault</h5></div>
+            <div class="card-body small">
+                {% if data.vault %}
+                    Master password set {{ data.vault.created_at|local('M j, Y') }}{% if data.vault.changed_at %}, changed {{ data.vault.changed_at|local('M j, Y') }}{% endif %}. Locks after {{ data.vault.auto_lock_minutes }} minutes.
+                    <div class="mt-2"><a href="/vault/settings">Vault settings</a></div>
+                {% else %}
+                    Your vault isn't set up yet. <a href="/vault">Set it up</a>.
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if data.totp_uri %}
+<script src="/public/vendor/qrcode.js"></script>
+<script>
+    const qr = qrcode(0, 'M'); qr.addData({{ data.totp_uri|js }}); qr.make();
+    document.getElementById('qr').innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2 });
+</script>
+{% endif %}
+{% endblock %}

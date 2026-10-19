@@ -1,0 +1,7 @@
+<?php return; ?>
+
+[SQL]
+host = localhost
+user = home_user
+password = 'a-strong-password'
+dbname = home

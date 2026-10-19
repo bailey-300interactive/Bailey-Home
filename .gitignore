@@ -1,0 +1,22 @@
+# Passwords and keys
+settings/*.ini.php
+settings/legacy-decrypt.php
+
+# Uploads, logs, caches
+storage/receipts/*
+storage/logs/*
+storage/cache/*
+storage/exports/*
+!storage/**/.gitkeep
+!storage/.htaccess
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+*.bak
+*.log
+error_log

@@ -1,0 +1,99 @@
+{% extends "bases/base-admin.html" %}
+{% set w = data.week %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Timesheet</h1><div class="sub">Week of {{ data.start|nicedate('F j, Y') }} · {{ w.total|hm }} logged{% if data.goal %} of {{ data.goal }}h goal{% endif %} · {{ w.value|money }} billable</div></div>
+    <div class="actions">
+        {% if data.users|length > 1 %}
+            <form method="get" class="js-autosubmit"><input type="hidden" name="week" value="{{ data.start }}"><select name="user" class="form-select">{% for u in data.users %}<option value="{{ u.id }}" {{ u.id == data.who ? 'selected' }}>{{ u.name }}</option>{% endfor %}</select></form>
+        {% endif %}
+        <div class="btn-group"><a class="btn btn-light" href="?week={{ data.prev }}&user={{ data.who }}">‹ Prev</a><a class="btn btn-light" href="?user={{ data.who }}">This week</a><a class="btn btn-light" href="?week={{ data.next }}&user={{ data.who }}">Next ›</a></div>
+    </div>
+</div>
+
+{% if data.goal %}
+    <div class="mb-3"><div class="bar bar-lg {{ w.total / 3600 >= data.goal ? 'ok' }}"><span style="width:{{ min(100, (w.total / 3600 / data.goal * 100)|round) }}%"></span></div></div>
+{% endif %}
+
+<div class="card card-flush">
+    <div class="table-responsive">
+        <table class="table ts-table mb-0">
+            <thead>
+                <tr>
+                    <th style="min-width:240px">Project · service</th>
+                    {% for d in w.days %}<th class="{{ d == base.today ? 'today' }}"><div class="dname">{{ d|date('D') }}</div><div class="dnum">{{ d|date('j') }}</div></th>{% endfor %}
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody id="tsBody">
+                {% for r in w.rows %}
+                    <tr data-project="{{ r.project_id }}" data-service="{{ r.service_id }}" data-client="{{ r.client_id }}">
+                        <td>
+                            <div class="d-flex align-items-center gap-2"><span class="color-dot" style="background:{{ r.color ?: '#adb5bd' }}"></span>
+                                <div><div class="fw-600">{{ r.project_name ?: 'No project' }}</div><div class="small-muted">{{ r.client_name ?: 'No client' }}{{ r.service_name ? ' · ' ~ r.service_name }}</div></div></div>
+                        </td>
+                        {% for d in w.days %}
+                            <td class="{{ d == base.today ? 'today' }}"><input class="js-cell {{ r.days[d] ? 'has' }}" data-date="{{ d }}" value="{{ r.days[d] ? r.days[d]|hm }}" {{ r.locked[d] or r.entries[d]|length > 1 ? 'disabled' }} title="{{ r.locked[d] ? 'Invoiced or running: edit on the Time page' : (r.entries[d]|length > 1 ? r.entries[d]|length ~ ' entries: edit on the Time page' : '') }}" inputmode="decimal"></td>
+                        {% endfor %}
+                        <td class="fw-600 js-row-total">{{ r.total|hm }}</td>
+                    </tr>
+                {% endfor %}
+                <tr id="addRow" class="no-print">
+                    <td colspan="9">
+                        <div class="d-flex gap-2 align-items-center">
+                            <select id="newProject" class="form-select form-select-sm" style="max-width:280px">
+                                <option value="">+ Add a row: pick a project…</option>
+                                {% for client, ps in data.project_options %}<optgroup label="{{ client }}">{% for p in ps %}<option value="{{ p.id }}" data-client="{{ client }}">{{ p.name }}</option>{% endfor %}</optgroup>{% endfor %}
+                            </select>
+                            <select id="newService" class="form-select form-select-sm" style="max-width:200px"><option value="">Service (optional)</option>{% for s in data.services %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select>
+                            <button class="btn btn-sm btn-light" id="addBtn">Add row</button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr><td>Total</td>{% for d in w.days %}<td class="js-day-total {{ d == base.today ? 'today' }}" data-date="{{ d }}">{{ w.totals[d] ? w.totals[d]|hm }}</td>{% endfor %}<td id="weekTotal">{{ w.total|hm }}</td></tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+<div class="small-muted">Type hours as 1:30, 1.5 or 90m and press Tab. Each cell is one entry for that project and day. Use the Time page to add notes or split a day into several entries.</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const T = '/app/Ajax/time.php', WHO = {{ data.who|js }};
+const toSec = t => { t = (t || '').trim(); if (!t) return 0; let m; if ((m = t.match(/^(\d+):(\d{1,2})$/))) return m[1] * 3600 + m[2] * 60; if (/^\d+(\.\d+)?$/.test(t)) return Math.round(parseFloat(t) * 3600); let s = 0; (t.match(/(\d+(?:\.\d+)?)\s*(h|m)/g) || []).forEach(x => { const n = parseFloat(x); s += /h/.test(x) ? n * 3600 : n * 60; }); return Math.round(s); };
+const hm = s => Math.floor(s / 3600) + ':' + String(Math.floor(s % 3600 / 60)).padStart(2, '0');
+function totals() {
+    let week = 0; const day = {};
+    $('#tsBody tr[data-project]').each(function () {
+        let row = 0;
+        $(this).find('.js-cell').each(function () { const s = toSec(this.value); row += s; day[this.dataset.date] = (day[this.dataset.date] || 0) + s; });
+        $(this).find('.js-row-total').text(hm(row)); week += row;
+    });
+    $('.js-day-total').each(function () { const s = day[this.dataset.date] || 0; $(this).text(s ? hm(s) : ''); });
+    $('#weekTotal').text(hm(week));
+}
+$(document).on('focus', '.js-cell', function () { $(this).data('was', this.value); this.select(); });
+$(document).on('change', '.js-cell', function () {
+    const el = this, tr = $(el).closest('tr');
+    api(T, { action: 'cell', user: WHO, project_id: tr.data('project') || '', service_id: tr.data('service') || '', client_id: tr.data('client') || '', date: el.dataset.date, value: el.value })
+        .then(r => { el.value = r.text; $(el).toggleClass('has', !!r.seconds); totals(); }, () => { el.value = $(el).data('was'); });
+});
+$(document).on('keydown', '.js-cell', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); $(this).trigger('change'); const cells = $('.js-cell:enabled'); cells.eq(cells.index(this) + 1).trigger('focus'); }
+});
+$('#addBtn').on('click', function () {
+    const p = $('#newProject').val(); if (!p) { $('#newProject').trigger('focus'); return; }
+    const pname = $('#newProject option:selected').text(), cname = $('#newProject option:selected').data('client'), s = $('#newService').val(), sname = s ? $('#newService option:selected').text() : '';
+    const days = {{ w.days|js }};
+    let html = `<tr data-project="${p}" data-service="${s}" data-client=""><td><div class="fw-600">${esc(pname)}</div><div class="small-muted">${esc(cname)}${sname ? ' · ' + esc(sname) : ''}</div></td>`;
+    days.forEach(d => html += `<td class="${d === HOME.today ? 'today' : ''}"><input class="js-cell" data-date="${d}" inputmode="decimal"></td>`);
+    html += '<td class="fw-600 js-row-total">0:00</td></tr>';
+    $('#addRow').before(html);
+    $('#tsBody tr[data-project]').last().find('.js-cell').first().trigger('focus');
+    $('#newProject').val(''); $('#newService').val('');
+});
+</script>
+{% endblock %}

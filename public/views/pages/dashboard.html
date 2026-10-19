@@ -1,0 +1,329 @@
+{% extends "bases/base-admin.html" %}
+{% set T = data.time %}
+{% set I = data.invoices %}
+{% set R = data.reminders %}
+{% set M = data.money %}
+{% set V = data.vault %}
+
+{% macro reminder_row(r) %}
+<div class="list-row reminder" data-id="{{ r.id }}">
+    <button class="check p{{ r.priority }} js-done" title="Done"></button>
+    <div class="grow">
+        <a href="/reminders?open={{ r.id }}" class="title text-reset text-decoration-none d-block truncate">{{ r.title }}</a>
+        <div class="meta">
+            {% if r.due_date %}<span class="{{ r.overdue ? 'text-danger fw-600' }}">{{ r.overdue and r.due_date < base.today ? r.due_date|relday : (r.due_time ? r.due_time|date('g:i A') : r.due_date|relday) }}</span>{% endif %}
+            {% if r.repeat_text %}<span><i data-feather="repeat" style="width:11px;height:11px"></i> {{ r.repeat_text }}</span>{% endif %}
+            {% if r.list_name %}<span class="chip"><span class="sw" style="background:{{ r.list_color }}"></span>{{ r.list_name }}</span>{% endif %}
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{% block body %}
+<div class="d-flex flex-wrap align-items-end gap-3 mb-4 hello">
+    <div class="me-auto">
+        <h1>{{ data.greeting }}, {{ user.first_name }}</h1>
+        <div class="sub">{{ 'now'|date('l, F j') }} · {{ R.today|length }} reminder{{ R.today|length == 1 ? '' : 's' }} today{% if T.today_seconds %} · {{ T.today_seconds|hm }} tracked{% endif %}</div>
+    </div>
+    <form class="big-input" id="dashQuick" style="flex:1 1 420px;max-width:640px" autocomplete="off">
+        <i data-feather="zap" class="text-primary"></i>
+        <input type="text" name="text" placeholder="Remind me… “pay water bill on the 15th every month”">
+        <button class="btn btn-primary btn-sm">Add</button>
+    </form>
+</div>
+<div class="parse-preview mb-3" id="dashPreview" style="margin-top:-1rem;justify-content:flex-end"></div>
+
+{% if data.first_run %}
+<div class="card mb-4" style="background:linear-gradient(135deg,#f0f6ff,#f5f0ff)">
+    <div class="card-body p-4">
+        <h4 class="fw-bold mb-1">Welcome to {{ base.site_profile.site_name }} 👋</h4>
+        <p class="text-muted mb-3">Four things to set up, in any order:</p>
+        <div class="row g-3">
+            <div class="col-md-3"><a href="/vault" class="card h-100 mb-0 text-decoration-none text-reset"><div class="card-body"><div style="font-size:1.6rem">🔐</div><div class="fw-600 mt-1">Vault</div><div class="small-muted">Set a master password and import your old accounts.</div></div></a></div>
+            <div class="col-md-3"><a href="/money/accounts?new=1" class="card h-100 mb-0 text-decoration-none text-reset"><div class="card-body"><div style="font-size:1.6rem">💳</div><div class="fw-600 mt-1">Money</div><div class="small-muted">Add an account, then import a bank CSV.</div></div></a></div>
+            <div class="col-md-3"><a href="/time/clients?new=1" class="card h-100 mb-0 text-decoration-none text-reset"><div class="card-body"><div style="font-size:1.6rem">💼</div><div class="fw-600 mt-1">Clients</div><div class="small-muted">Add a client and a project, then start the timer.</div></div></a></div>
+            <div class="col-md-3"><a href="/reminders" class="card h-100 mb-0 text-decoration-none text-reset"><div class="card-body"><div style="font-size:1.6rem">🔔</div><div class="fw-600 mt-1">Reminders</div><div class="small-muted">Type one in the box above.</div></div></a></div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ================= KPI row ================= #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-xl-3">
+        <div class="card kpi mb-0">
+            <a href="/time/timesheet" class="stretched-link"></a>
+            <div class="label">Hours this week</div>
+            <div class="value">{{ (T.week_seconds / 3600)|number_format(1) }}<span class="fs-6 text-muted fw-normal">{{ T.goal ? ' / ' ~ T.goal|number_format(0) ~ 'h' : 'h' }}</span></div>
+            {% if T.goal %}<div class="bar mt-2 {{ T.week_seconds / 3600 >= T.goal ? 'ok' }}"><span style="width:{{ min(100, (T.week_seconds / 3600 / T.goal * 100)|round) }}%"></span></div>{% endif %}
+            <div class="foot">{% set diff = T.week_seconds - T.last_week_seconds %}{{ T.last_week_seconds ? (diff >= 0 ? '▲ ' : '▼ ') ~ (diff|abs)|hm ~ ' vs last week' : 'Last week: none' }}</div>
+            <div class="icon tint-blue"><i data-feather="clock"></i></div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="card kpi mb-0">
+            <a href="/time/invoice-new" class="stretched-link"></a>
+            <div class="label">Ready to invoice</div>
+            <div class="value money">{{ T.unbilled|money }}</div>
+            <div class="foot">{{ T.top_unbilled|length ? 'Most from ' ~ T.top_unbilled[0].name : 'All billed' }}</div>
+            <div class="icon tint-purple"><i data-feather="file-plus"></i></div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="card kpi mb-0">
+            <a href="/time/invoices?status=outstanding" class="stretched-link"></a>
+            <div class="label">Owed to you</div>
+            <div class="value money">{{ I.outstanding|money }}</div>
+            <div class="foot">{% if I.overdue_count %}<span class="text-danger fw-600">{{ I.overdue|money }} overdue</span> · {% endif %}{{ I.paid_month|money }} paid this month</div>
+            <div class="icon tint-green"><i data-feather="inbox"></i></div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="card kpi mb-0">
+            <a href="/money" class="stretched-link"></a>
+            <div class="label">Spent this month</div>
+            {% if data.has_money %}
+                <div class="value money">{{ M.budget.spent|money }}</div>
+                {% if M.budget.budget > 0 %}<div class="bar mt-2 {{ M.budget.spent > M.budget.budget ? 'over' : (M.budget.spent > M.budget.budget * M.budget.pct_of_month / 100 * 1.1 ? 'warn' : 'ok') }}"><span style="width:{{ min(100, (M.budget.spent / M.budget.budget * 100)|round) }}%"></span><i class="pace" style="left:{{ M.budget.pct_of_month }}%"></i></div>{% endif %}
+                <div class="foot">{% if M.budget.budget > 0 %}of {{ M.budget.budget|money }} budget · {% endif %}{% set d = M.budget.spent - M.last_month_same_day %}{{ d >= 0 ? '▲' : '▼' }} {{ d|abs|money }} vs last month</div>
+            {% else %}
+                <div class="value text-muted">—</div><div class="foot">Add an account to start</div>
+            {% endif %}
+            <div class="icon tint-amber"><i data-feather="credit-card"></i></div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    {# ================= Left column ================= #}
+    <div class="col-xl-8">
+        {# Timer #}
+        {% set t = T.timer %}
+        <div class="card timer-card">
+            <div class="card-body p-4">
+                <form id="dashTimer" class="d-flex flex-wrap align-items-center gap-3" autocomplete="off">
+                    <div class="grow" style="min-width:220px">
+                        <div class="muted small mb-1">{{ t ? 'Tracking now' : 'Start tracking' }}</div>
+                        {% if t %}
+                            <div class="fs-5 fw-600 truncate">{{ t.notes ?: (t.project_name ?: 'No project') }}</div>
+                            <div class="muted small">{{ t.client_name }}{{ t.project_name ? ' · ' ~ t.project_name }}{{ t.service_name ? ' · ' ~ t.service_name }}</div>
+                        {% else %}
+                            <div class="d-flex gap-2">
+                                <select name="project_id" class="form-select">
+                                    <option value="">Pick a project…</option>
+                                    {% for client, ps in base.quick.projects %}<optgroup label="{{ client }}">{% for p in ps %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</optgroup>{% endfor %}
+                                </select>
+                                <input name="notes" class="form-control" placeholder="What on?">
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="text-center"><div class="clock" {% if t %}data-start="{{ t.started_ts }}"{% endif %}>{{ t ? t.elapsed|hm ~ ':00' : '0:00:00' }}</div><div class="muted small mt-1">{{ T.today_seconds|hm }} today</div></div>
+                    {% if t %}<button type="button" class="btn-start btn-stop js-timer-stop" title="Stop"><i data-feather="square"></i></button>
+                    {% else %}<button class="btn-start" title="Start"><i data-feather="play"></i></button>{% endif %}
+                </form>
+                {% if not t and T.recent %}
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        {% for r in T.recent %}<button type="button" class="btn btn-sm js-recent" style="background:rgba(255,255,255,.1);color:#fff;border-radius:99px" data-project="{{ r.project_id }}" data-service="{{ r.service_id }}"><span class="color-dot" style="background:{{ r.color }}"></span> {{ r.project_name }}</button>{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# This week #}
+        <div class="card">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">This week</h5><span class="small-muted ms-2">{{ T.week_seconds|hm }} · {{ T.week_value|money }} billable</span><a href="/time/timesheet" class="ms-auto small">Timesheet</a></div>
+            <div class="card-body pt-2">{% if T.chart.series %}<div id="weekChart" style="height:240px"></div>{% else %}<div class="empty">No time this week yet.</div>{% endif %}</div>
+        </div>
+
+        {% if data.has_money %}
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header d-flex align-items-center"><h5 class="card-title">Where the money went</h5><a href="/money/reports" class="ms-auto small">Reports</a></div>
+                    <div class="card-body pt-2">
+                        {% if M.by_category %}
+                            <div id="catChart" style="height:200px"></div>
+                            {% for c in M.by_category|slice(0, 5) %}<div class="d-flex align-items-center gap-2 py-1 small"><span class="color-dot" style="background:{{ c.color }}"></span>{{ c.icon }} {{ c.name }}<span class="ms-auto money fw-600">{{ c.total|money }}</span></div>{% endfor %}
+                        {% else %}<div class="empty py-4">No spending yet this month.</div>{% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card card-flush">
+                    <div class="card-header d-flex align-items-center"><h5 class="card-title">Budgets</h5><span class="small-muted ms-2">{{ M.budget.pct_of_month }}% of the month</span><a href="/money/budgets" class="ms-auto small">All</a></div>
+                    {% for c in M.top_budgets %}
+                        <div class="budget-row">
+                            <div class="top"><span>{{ c.icon }}</span><span class="fw-600 small">{{ c.name }}</span><span class="ms-auto small {{ c.status == 'over' ? 'text-danger fw-600' : 'text-muted' }}">{{ c.spent|money }} / {{ c.budget|money }}</span></div>
+                            <div class="bar {{ c.status }}"><span style="width:{{ c.pct }}%"></span>{% if M.budget.pct_of_month < 100 %}<i class="pace" style="left:{{ M.budget.pct_of_month }}%"></i>{% endif %}</div>
+                        </div>
+                    {% else %}
+                        <div class="empty py-4"><a href="/money/budgets">Set budgets</a> to track them here.</div>
+                    {% endfor %}
+                    <div class="card-body border-top py-3">
+                        <div class="d-flex small"><span class="text-muted">Net worth</span><span class="ms-auto fw-600 money">{{ M.net.net|money }}</span></div>
+                        {% if M.uncategorized %}<div class="d-flex small mt-1"><a href="/money/transactions?category=none">{{ M.uncategorized }} to categorize</a></div>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header"><h5 class="card-title">Cash flow, last 6 months</h5></div>
+            <div class="card-body pt-2"><div id="flowChart" style="height:220px"></div></div>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ================= Right column ================= #}
+    <div class="col-xl-4">
+        <div class="card card-flush">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">Today</h5>{% if R.done_today %}<span class="chip chip-green ms-2">{{ R.done_today }} done 🎉</span>{% endif %}<a href="/reminders" class="ms-auto small">Reminders</a></div>
+            <div class="agenda">
+                {% for r in R.today %}{{ _self.reminder_row(r) }}{% else %}<div class="empty py-4"><div class="big">🌤️</div>Nothing due today.</div>{% endfor %}
+                {% if R.bills %}
+                    <div class="day">Bills</div>
+                    {% for b in R.bills %}
+                        <a href="/money/bills?pay={{ b.id }}" class="list-row text-decoration-none">
+                            <div class="bill-day {{ b.days < 0 ? 'late' : (b.days <= 3 ? 'soon') }}"><div class="m">{{ b.next_due|date('M') }}</div><div class="d">{{ b.next_due|date('j') }}</div></div>
+                            <div class="grow"><div class="title truncate">{{ b.name }}</div><div class="meta">{{ b.days < 0 ? (b.days|abs) ~ (b.days == -1 ? ' day late' : ' days late') : b.next_due|relday }}{{ b.autopay ? ' · autopay' }}</div></div>
+                            <span class="money fw-600">{{ b.amount|money }}</span>
+                        </a>
+                    {% endfor %}
+                {% endif %}
+                {% if R.upcoming %}
+                    <div class="day">Coming up</div>
+                    {% for r in R.upcoming %}{{ _self.reminder_row(r) }}{% endfor %}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card card-flush">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">Invoices to look at</h5><a href="/time/invoices" class="ms-auto small">All</a></div>
+            {% for i in I.attention %}
+                <a href="/time/invoice/{{ i.id }}" class="list-row text-decoration-none">
+                    <span class="avatar-initials" style="background:{{ i.client_color }};border-radius:9px;width:30px;height:30px;font-size:.7rem">{{ i.client_name|initials }}</span>
+                    <div class="grow"><div class="title">{{ i.number }} · <span class="fw-normal">{{ i.client_name }}</span></div>
+                        <div class="meta">{% if i.status == 'draft' %}<span class="chip status-draft">Draft, not sent</span>{% elseif i.due_date < base.today %}<span class="chip status-overdue">{{ i.due_date|relday }}</span>{% else %}due {{ i.due_date|relday }}{% endif %}</div></div>
+                    <span class="money fw-600">{{ (i.status == 'draft' ? i.total : i.balance)|money }}</span>
+                </a>
+            {% else %}
+                {% if T.top_unbilled %}
+                    {% for c in T.top_unbilled %}
+                        <a href="/time/invoice-new?client={{ c.id }}" class="list-row text-decoration-none">
+                            <span class="color-dot" style="background:{{ c.color }}"></span><div class="grow"><div class="title">{{ c.name }}</div><div class="meta">unbilled</div></div><span class="money fw-600">{{ c.value|money }}</span>
+                        </a>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty py-4">All caught up.</div>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">Vault</h5><a href="/vault" class="ms-auto small">Open</a></div>
+            <div class="card-body">
+                {% if not V.set_up %}
+                    <div class="d-flex align-items-center gap-3"><span class="emoji-badge tint-blue" style="width:44px;height:44px">🔐</span><div class="grow"><div class="fw-600">Not set up yet</div><div class="small-muted">Pick a master password and bring in your old accounts.</div></div></div>
+                    <a href="/vault" class="btn btn-primary btn-sm mt-3">Set up the vault</a>
+                {% elseif not V.unlocked %}
+                    <div class="d-flex align-items-center gap-3"><span class="emoji-badge tint-gray" style="width:44px;height:44px">🔒</span><div class="grow"><div class="fw-600">Locked</div><div class="small-muted">{{ V.count }} items. Unlock to see health and recent items.</div></div><a href="/vault" class="btn btn-light btn-sm">Unlock</a></div>
+                {% else %}
+                    {% set hs = V.health.score %}
+                    <div class="d-flex align-items-center gap-3">
+                        <svg viewBox="0 0 120 120" style="width:64px;height:64px;flex:none"><circle cx="60" cy="60" r="50" fill="none" stroke="var(--home-border)" stroke-width="14"/><circle cx="60" cy="60" r="50" fill="none" stroke="{{ hs >= 80 ? '#1cbb8c' : (hs >= 55 ? '#f5a623' : '#f0506e') }}" stroke-width="14" stroke-linecap="round" stroke-dasharray="314.2" stroke-dashoffset="{{ 314.2 * (1 - hs / 100) }}" transform="rotate(-90 60 60)"/><text x="60" y="70" text-anchor="middle" font-size="32" font-weight="700" fill="currentColor">{{ hs }}</text></svg>
+                        <div class="grow small">
+                            <div class="fw-600 mb-1">Password health</div>
+                            <a href="/vault/health" class="d-block">{{ V.health.weak }} weak · {{ V.health.reused }} reused · {{ V.health.old }} old</a>
+                            <span class="text-muted">{{ V.count }} items</span>
+                        </div>
+                    </div>
+                    {% if V.recent %}
+                        <div class="mt-3">{% for it in V.recent %}<a href="/vault?item={{ it.id }}" class="d-flex align-items-center gap-2 py-1 text-decoration-none small"><i data-feather="key" style="width:13px;height:13px"></i><span class="text-body">{{ it.name }}</span><span class="text-muted truncate ms-auto" style="max-width:50%">{{ it.sub }}</span></a>{% endfor %}</div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        {% if data.has_money and M.goals %}
+        <div class="card card-flush">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">Goals</h5><a href="/money/goals" class="ms-auto small">All</a></div>
+            {% for g in M.goals %}
+                <div class="budget-row"><div class="top"><span>{{ g.emoji }}</span><span class="fw-600 small">{{ g.name }}</span><span class="ms-auto small text-muted">{{ g.current|money }} / {{ g.target|money }}</span></div><div class="bar ok"><span style="width:{{ g.pct }}%;background:{{ g.color }}"></span></div></div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="card card-flush">
+            <div class="card-header"><h5 class="card-title">Recent activity</h5></div>
+            {% for a in data.activity %}
+                <div class="list-row py-2">
+                    <span class="emoji-badge" style="width:28px;height:28px;font-size:.85rem">{{ {'vault': '🔐', 'money': '💵', 'time': '⏱️', 'reminders': '🔔'}[a.module] ?? '•' }}</span>
+                    <div class="grow small">{% if a.link %}<a href="{{ a.link }}" class="text-body text-decoration-none">{{ a.text }}</a>{% else %}{{ a.text }}{% endif %}</div>
+                    <span class="small-muted text-nowrap">{{ a.created_at|ago }}</span>
+                </div>
+            {% else %}
+                <div class="empty py-3">Nothing yet.</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const RA = '/app/Ajax/reminders.php', TA = '/app/Ajax/time.php';
+let pt;
+$('#dashQuick input').on('input', function () {
+    const v = this.value; clearTimeout(pt);
+    pt = setTimeout(() => { if (!v.trim()) { $('#dashPreview').html(''); return; } api(RA, { action: 'parse', text: v }, { quiet: true }).then(r => $('#dashPreview').html(r.html)); }, 200);
+});
+$('#dashQuick').on('submit', function (e) {
+    e.preventDefault(); const v = $(this).find('input').val(); if (!v.trim()) return;
+    api(RA, { action: 'quick', text: v }).then(r => { ShowAlert(r.message, 'success'); setTimeout(() => location.reload(), 400); });
+});
+$(document).on('click', '.js-done', function () {
+    const row = $(this).closest('.reminder'), btn = $(this);
+    btn.addClass('done').html(feather.icons.check.toSvg({ width: 12, height: 12 }));
+    api(RA, { action: 'complete', id: row.data('id') }).then(r => { row.addClass('row-done'); ShowAlert(r.message, 'success'); setTimeout(() => row.slideUp(250), 700); }, () => btn.removeClass('done').html(''));
+});
+$('#dashTimer').on('submit', function (e) {
+    e.preventDefault(); const d = Object.fromEntries(new FormData(this)); d.action = 'start';
+    api(TA, d).then(() => location.reload());
+});
+$('.js-recent').on('click', function () { api(TA, { action: 'start', project_id: $(this).data('project'), service_id: $(this).data('service') || '' }).then(() => location.reload()); });
+
+const wk = {{ T.chart|js }};
+if (wk.series.length) {
+    chart('#weekChart', {
+        chart: { type: 'bar', height: 240, stacked: true },
+        series: wk.series.map(s => ({ name: s.name, data: s.data })),
+        colors: wk.series.map((s, i) => s.color || SERIES[i % SERIES.length]),
+        plotOptions: { bar: { columnWidth: '50%', borderRadius: 3, borderRadiusApplication: 'end', borderRadiusWhenStacked: 'last' } },
+        stroke: { show: true, width: 2, colors: ['#fff'] },
+        xaxis: { categories: wk.days.map(d => new Date(d + 'T12:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })) },
+        yaxis: { labels: { formatter: v => v.toFixed(0) + 'h' } },
+        tooltip: { shared: true, intersect: false, y: { formatter: v => v ? v.toFixed(2) + ' h' : '—' } },
+        legend: { show: wk.series.length > 1 },
+    });
+}
+{% if data.has_money %}
+const cats = {{ M.by_category|js }};
+if (cats.length) chart('#catChart', {
+    chart: { type: 'donut', height: 200 },
+    series: cats.map(c => Math.round(c.total * 100) / 100), labels: cats.map(c => c.name), colors: cats.map(c => c.color),
+    legend: { show: false }, stroke: { width: 2, colors: ['#fff'] },
+    plotOptions: { pie: { donut: { size: '70%', labels: { show: true, total: { show: true, label: 'This month', formatter: w => moneyShort(w.globals.seriesTotals.reduce((a, b) => a + b, 0)) }, value: { formatter: v => fmtMoney(v) } } } } },
+    tooltip: { y: { formatter: v => fmtMoney(v) } },
+});
+const fl = {{ M.monthly|js }};
+chart('#flowChart', {
+    chart: { type: 'bar', height: 220 },
+    series: [{ name: 'Income', data: fl.income }, { name: 'Spending', data: fl.expense }],
+    colors: [SERIES[2], SERIES[1]],
+    plotOptions: { bar: { columnWidth: '55%', borderRadius: 4, borderRadiusApplication: 'end' } },
+    stroke: { show: true, width: 2, colors: ['transparent'] },
+    xaxis: { categories: fl.labels }, yaxis: { labels: { formatter: moneyShort } },
+    tooltip: { shared: true, intersect: false, y: { formatter: v => fmtMoney(v) } },
+});
+{% endif %}
+</script>
+{% endblock %}

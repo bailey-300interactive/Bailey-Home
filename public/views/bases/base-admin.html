@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="csrf-token" content="{{ base.csrf }}">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{{ base.page_title }} · {{ base.site_profile.site_name }}</title>
+
+    {% set theme = session.site_theme ?: 'default' %}
+    <link href="/public/vendor/adminkit/css/light.css" rel="stylesheet">
+    <link href="/public/assets/css/home.css?v=1" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/public/assets/img/favicon-32.png">
+    <link rel="apple-touch-icon" href="/public/assets/img/apple-touch-icon.png">
+    <meta name="theme-color" content="#1b2430">
+    <link rel="manifest" href="/public/manifest.webmanifest">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Home">
+    <style>body { opacity: 0; }</style>
+    {% block head %}{% endblock %}
+</head>
+<body data-theme="{{ theme }}" data-layout="fluid" data-sidebar-position="left" data-sidebar-layout="default">
+<div class="wrapper">
+    <nav id="sidebar" class="sidebar js-sidebar">
+        <div class="sidebar-content js-simplebar">
+            <a class="sidebar-brand" href="/">
+                <img src="/public/assets/img/icon-192.png" class="brand-mark" alt="">
+                <span class="sidebar-brand-text align-middle">{{ base.site_profile.site_name }}</span>
+            </a>
+
+            <ul class="sidebar-nav">
+                {% for item in base.menu.main %}
+                    {% if item.header is defined %}
+                        <li class="sidebar-header">{{ item.header }}</li>
+                    {% else %}
+                        {% set active = item.match == base.section %}
+                        <li class="sidebar-item {{ active ? 'active' }}">
+                            {% if item.sub_items is not empty %}
+                                <a data-bs-target="#nav-{{ item.match }}" data-bs-toggle="collapse" class="sidebar-link {{ active ? '' : 'collapsed' }}">
+                                    <i class="align-middle" data-feather="{{ item.icon }}"></i> <span class="align-middle">{{ item.name }}</span>
+                                </a>
+                                <ul id="nav-{{ item.match }}" class="sidebar-dropdown list-unstyled collapse {{ active ? 'show' }}" data-bs-parent="#sidebar">
+                                    {% for sub in item.sub_items %}
+                                        <li class="sidebar-item {{ base.path == sub.link or (sub.link != '/' ~ item.match and base.path starts with sub.link) ? 'active' }}"><a class="sidebar-link" href="{{ sub.link }}">{{ sub.name }}</a></li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <a class="sidebar-link" href="{{ item.link }}">
+                                    <i class="align-middle" data-feather="{{ item.icon }}"></i> <span class="align-middle">{{ item.name }}</span>
+                                    {% if item.badge %}<span class="sidebar-badge">{{ item.badge }}</span>{% endif %}
+                                </a>
+                            {% endif %}
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+
+            <div class="sidebar-user">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="avatar-initials">{{ session.name|initials }}</div>
+                    <div class="flex-grow-1" style="min-width:0">
+                        <a class="sidebar-user-title dropdown-toggle text-white text-decoration-none d-block truncate" href="#" data-bs-toggle="dropdown">{{ session.name }}</a>
+                        <div class="dropdown-menu dropdown-menu-start">
+                            <a class="dropdown-item" href="/profile"><i class="align-middle me-1" data-feather="user"></i> Profile</a>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item" href="/logout"><i class="align-middle me-1" data-feather="log-out"></i> Sign out</a>
+                        </div>
+                        <div class="small" style="color:rgba(233,236,239,.45)">{{ session.auth_text }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main">
+        <nav class="navbar navbar-expand navbar-light navbar-bg">
+            <a class="sidebar-toggle js-sidebar-toggle"><i class="hamburger align-self-center"></i></a>
+
+            <div class="top-search" data-bs-toggle="modal" data-bs-target="#searchModal" role="button" aria-label="Search">
+                <i data-feather="search" style="width:16px;height:16px"></i><span>Search everything…</span><kbd>Ctrl K</kbd>
+            </div>
+
+            <div class="navbar-collapse collapse">
+                <ul class="navbar-nav navbar-align align-items-center gap-2">
+                    <li class="nav-item" id="timerPillWrap">
+                        {% if base.timer %}
+                            <span class="timer-pill" id="timerPill" data-start="{{ base.timer.started_ts }}">
+                                <span class="dot"></span>
+                                <a href="/time" class="what text-decoration-none">{{ base.timer.project_name ?: base.timer.client_name ?: 'Timer' }}</a>
+                                <span class="elapsed">{{ base.timer.elapsed|hm }}</span>
+                                <button type="button" class="js-timer-stop" title="Stop timer"><i data-feather="square" style="width:12px;height:12px"></i></button>
+                            </span>
+                        {% endif %}
+                    </li>
+                    {% if base.vault_unlocked %}
+                        <li class="nav-item d-none d-md-block">
+                            <a href="/vault" class="vault-status open" title="Vault is unlocked"><i data-feather="unlock" style="width:14px;height:14px"></i> Vault open</a>
+                        </li>
+                    {% endif %}
+                    <li class="nav-item dropdown">
+                        <button class="btn btn-primary btn-quick" data-bs-toggle="dropdown"><i data-feather="plus"></i> <span class="d-none d-sm-inline">New</span></button>
+                        <div class="dropdown-menu dropdown-menu-end">
+                            <a class="dropdown-item js-quick" data-tab="reminder" href="#"><i class="me-2" data-feather="bell"></i>Reminder <span class="small-muted ms-3">R</span></a>
+                            <a class="dropdown-item js-quick" data-tab="time" href="#"><i class="me-2" data-feather="clock"></i>Time entry <span class="small-muted ms-3">T</span></a>
+                            <a class="dropdown-item js-quick" data-tab="expense" href="#"><i class="me-2" data-feather="dollar-sign"></i>Expense <span class="small-muted ms-3">E</span></a>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item" href="/vault?new=login"><i class="me-2" data-feather="key"></i>Password</a>
+                            <a class="dropdown-item" href="/time/clients?new=1"><i class="me-2" data-feather="briefcase"></i>Client</a>
+                            <a class="dropdown-item" href="/time/invoice-new"><i class="me-2" data-feather="file-text"></i>Invoice</a>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <main class="content">
+            <div class="container-fluid p-0">{% block body %}{% endblock %}</div>
+        </main>
+    </div>
+</div>
+
+{% include 'partials/quick-add.html' %}
+{% include 'partials/search.html' %}
+
+<script src="/public/vendor/jquery-3.7.0.min.js"></script>
+<script src="/public/vendor/adminkit/js/app.js"></script>
+<script src="/public/assets/js/home.js?v=1"></script>
+<script>
+    window.HOME = { today: {{ base.today|js }}, currency: {{ setting('currency', 'USD')|js }} };
+    $(function () {
+        {% for message in messages %}ShowAlert({{ message.message|js }}, {{ message.type|js }});{% endfor %}
+    });
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

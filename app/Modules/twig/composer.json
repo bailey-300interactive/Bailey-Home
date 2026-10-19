@@ -1,0 +1,13 @@
+{
+    "name": "bailey/twig",
+    "description": "Twig package for framework",
+    "authors": [
+        {
+            "name": "Bailey Rotellini",
+            "email": "baileyrotellini1998@gmail.com"
+        }
+    ],
+    "require": {
+        "twig/twig": "^3.0"
+    }
+}

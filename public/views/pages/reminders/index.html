@@ -1,0 +1,264 @@
+{% extends "bases/base-admin.html" %}
+
+{% macro row(r, done) %}
+<div class="list-row reminder {{ r.overdue ? 'is-overdue' }}" data-id="{{ r.id }}">
+    {% if done %}
+        <span class="check done"><i data-feather="check" style="width:12px;height:12px"></i></span>
+    {% else %}
+        <button class="check p{{ r.priority }} js-done" title="Mark done"></button>
+    {% endif %}
+    <div class="grow js-edit cursor-pointer">
+        <div class="title {{ done ? 'text-muted' }}">{{ r.title }}</div>
+        <div class="meta">
+            {% if done %}
+                <span>Done {{ r.completed_at|local('M j, g:i A') }}</span>
+            {% else %}
+                {% if r.due_date %}<span class="{{ r.overdue ? 'text-danger fw-600' }}"><i data-feather="calendar" style="width:12px;height:12px"></i> {{ r.due_date|relday }}{% if r.due_time %} · {{ r.due_time|date('g:i A') }}{% endif %}</span>{% endif %}
+                {% if r.snoozed %}<span class="chip chip-amber">💤 until {{ r.snoozed_until|local('g:i A') }}</span>{% endif %}
+            {% endif %}
+            {% if r.repeat_text %}<span><i data-feather="repeat" style="width:12px;height:12px"></i> {{ r.repeat_text }}</span>{% endif %}
+            {% if r.list_name %}<span class="chip"><span class="sw" style="background:{{ r.list_color }}"></span>{{ r.list_name }}</span>{% endif %}
+            {% if r.link %}<a href="{{ r.link.url }}" class="chip chip-blue text-decoration-none"><i data-feather="{{ r.link.icon }}" style="width:11px;height:11px"></i> {{ r.link.label }}</a>{% endif %}
+            {% if r.notes %}<span class="truncate" style="max-width:340px">{{ r.notes }}</span>{% endif %}
+        </div>
+    </div>
+    {% if not done %}
+    <div class="dropdown">
+        <button class="btn btn-light btn-icon" data-bs-toggle="dropdown" title="Snooze"><i data-feather="moon"></i></button>
+        <div class="dropdown-menu dropdown-menu-end">
+            <h6 class="dropdown-header">Snooze until…</h6>
+            <a class="dropdown-item js-snooze" data-until="1h" href="#">In 1 hour</a>
+            <a class="dropdown-item js-snooze" data-until="3h" href="#">In 3 hours</a>
+            <a class="dropdown-item js-snooze" data-until="tonight" href="#">This evening</a>
+            <a class="dropdown-item js-snooze" data-until="tomorrow" href="#">Tomorrow morning</a>
+            <a class="dropdown-item js-snooze" data-until="nextweek" href="#">Next Monday</a>
+        </div>
+    </div>
+    {% elseif r.status == 'done' and not r.repeat_unit %}
+        <button class="btn btn-light btn-sm js-reopen">Undo</button>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% block body %}
+<div class="page-head">
+    <div>
+        <h1>{{ data.list ? data.list.icon ~ ' ' ~ data.list.name : data.titles[data.view] }}</h1>
+        <div class="sub">
+            {% if data.view == 'today' %}{{ 'now'|date('l, F j') }} · {{ data.count }} to do{% if data.streak %} · {{ data.streak }} done today 🎉{% endif %}
+            {% else %}{{ data.count }} reminder{{ data.count == 1 ? '' : 's' }}{% endif %}
+        </div>
+    </div>
+    <div class="actions">
+        <form class="d-flex" method="get"><input type="search" name="q" value="{{ data.search }}" class="form-control" placeholder="Search reminders"></form>
+        <button class="btn btn-primary js-new-reminder"><i data-feather="plus"></i> New reminder</button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-3 col-xl-2 order-lg-1 order-2">
+        <div class="card">
+            <div class="vault-nav py-2" style="border:0">
+                <a href="/reminders" class="{{ data.view == 'today' ? 'active' }}">☀️ Today <span class="n">{{ data.counts.today }}</span></a>
+                <a href="/reminders/upcoming" class="{{ data.view == 'upcoming' ? 'active' }}">📅 Upcoming <span class="n">{{ data.counts.upcoming }}</span></a>
+                <a href="/reminders/all" class="{{ data.view == 'all' ? 'active' }}">📋 All <span class="n">{{ data.counts.all }}</span></a>
+                <a href="/reminders/someday" class="{{ data.view == 'someday' ? 'active' }}">💭 Someday <span class="n">{{ data.counts.someday }}</span></a>
+                <a href="/reminders/done" class="{{ data.view == 'done' ? 'active' }}">✅ Completed <span class="n">{{ data.counts.done }}</span></a>
+                <div class="hd d-flex align-items-center">Lists <a href="#" class="ms-auto p-0 small-muted js-new-list" style="font-size:.7rem">+ New</a></div>
+                {% for l in data.lists %}
+                    <a href="/reminders/list/{{ l.id }}" class="{{ data.list and data.list.id == l.id ? 'active' }}"><span class="color-dot" style="background:{{ l.color }}"></span> {{ l.icon }} {{ l.name }} <span class="n">{{ l.n }}</span></a>
+                {% endfor %}
+            </div>
+        </div>
+        {% if data.list %}
+            <div class="small-muted px-1"><a href="#" class="js-edit-list" data-list="{{ data.list|json_encode }}">Edit this list</a></div>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-9 col-xl-10 order-lg-2 order-1">
+        {% if data.view != 'done' %}
+        <form class="big-input mb-4" id="inlineQuick" autocomplete="off">
+            <i data-feather="plus-circle" class="text-primary"></i>
+            <input type="text" name="text" placeholder="Add a reminder: “Renew car registration on 3/14”, “Trash every tue 7pm”, “Call Mike tomorrow 2pm !high”">
+            {% if data.list %}<input type="hidden" name="list_id" value="{{ data.list.id }}">{% endif %}
+            <button class="btn btn-primary">Add</button>
+        </form>
+        <div class="parse-preview mb-3 px-1" id="inlinePreview" style="margin-top:-.75rem"></div>
+        {% endif %}
+
+        {% for g in data.groups %}
+            <div class="card card-flush">
+                <div class="agenda"><div class="day {{ g.overdue ? 'text-danger' }}">{{ g.label }}</div></div>
+                {% for b in g.bills %}
+                    <div class="list-row">
+                        <span class="emoji-badge" style="width:22px;height:22px;font-size:.8rem;background:none">{{ b.cat_icon ?: '🧾' }}</span>
+                        <div class="grow">
+                            <div class="title">{{ b.name }} <span class="money">{{ b.amount|money }}</span></div>
+                            <div class="meta"><span class="chip chip-red">Bill</span> {% if b.autopay %}<span class="chip chip-green">Autopay</span>{% endif %} due {{ b.next_due|relday }}</div>
+                        </div>
+                        <a href="/money/bills?pay={{ b.id }}" class="btn btn-light btn-sm">Mark paid</a>
+                    </div>
+                {% endfor %}
+                {% for r in g.items %}{{ _self.row(r, data.view == 'done') }}{% endfor %}
+            </div>
+        {% else %}
+            <div class="card"><div class="empty">
+                <div class="big">{{ data.view == 'today' ? '🌤️' : '✨' }}</div>
+                {{ data.view == 'today' ? 'Nothing due today. Enjoy it.' : 'Nothing here.' }}
+            </div></div>
+        {% endfor %}
+        {% if data.view == 'done' and data.count %}
+            <form method="post" class="text-end" data-confirm="Delete finished reminders older than 30 days?">{{ csrf_field() }}<input type="hidden" name="action" value="clear-done"><button class="btn btn-link btn-sm text-muted">Clear finished older than 30 days</button></form>
+        {% endif %}
+    </div>
+</div>
+
+{# ---------- Edit modal ---------- #}
+<div class="modal fade" id="remModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" id="remForm" autocomplete="off">
+            <div class="modal-header"><h5 class="modal-title">Reminder</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" name="action" value="save"><input type="hidden" name="id">
+                <div class="mb-3"><input name="title" class="form-control form-control-lg" placeholder="What do you need to remember?" required></div>
+                <div class="mb-3"><textarea name="notes" class="form-control" rows="2" placeholder="Notes"></textarea></div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6"><label class="form-label">Date</label><input type="date" name="due_date" class="form-control"></div>
+                    <div class="col-6"><label class="form-label">Time</label><input type="time" name="due_time" class="form-control"></div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Repeat</label>
+                    <select name="repeat" class="form-select">
+                        <option value="">Never</option><option value="day">Every day</option><option value="weekdays">Every weekday</option><option value="week">Every week</option><option value="month">Every month</option><option value="year">Every year</option><option value="custom">Custom…</option>
+                    </select>
+                </div>
+                <div class="border rounded p-2 mb-3 hidden" id="customRepeat">
+                    <div class="d-flex gap-2 align-items-center mb-2">
+                        <span>Every</span><input type="number" name="repeat_interval" class="form-control" style="width:80px" min="1" value="1">
+                        <select name="repeat_unit" class="form-select"><option value="day">days</option><option value="week">weeks</option><option value="month">months</option><option value="year">years</option></select>
+                    </div>
+                    <div class="d-flex gap-1 flex-wrap mb-2" id="repeatDays">
+                        {% for k, d in {mon:'Mon',tue:'Tue',wed:'Wed',thu:'Thu',fri:'Fri',sat:'Sat',sun:'Sun'} %}
+                            <label class="btn btn-sm btn-light"><input type="checkbox" name="repeat_days[]" value="{{ k }}" class="form-check-input me-1">{{ d }}</label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="row g-2 mb-3" id="repeatMore">
+                    <div class="col-6"><label class="form-label">Next one counts from</label><select name="repeat_from" class="form-select"><option value="due">the due date</option><option value="completed">when I finish it</option></select></div>
+                    <div class="col-6"><label class="form-label">Stop after</label><input type="date" name="repeat_until" class="form-control"></div>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6"><label class="form-label">List</label><select name="list_id" class="form-select"><option value="">None</option>{% for l in data.lists %}<option value="{{ l.id }}">{{ l.icon }} {{ l.name }}</option>{% endfor %}</select></div>
+                    <div class="col-6"><label class="form-label">Priority</label><select name="priority" class="form-select"><option value="0">None</option><option value="1">Low</option><option value="2">Medium</option><option value="3">High</option></select></div>
+                </div>
+                <div class="row g-2">
+                    <div class="col-6"><label class="form-label">For</label><select name="assigned_to" class="form-select">{% for u in data.users %}<option value="{{ u.id }}" {{ u.id == session.user_Id ? 'selected' }}>{{ u.name }}</option>{% endfor %}</select></div>
+                    <div class="col-6"><label class="form-label">Email alert</label>
+                        <select name="notify_before" class="form-select"><option value="0">At the time</option><option value="15">15 min before</option><option value="60">1 hour before</option><option value="1440">1 day before</option></select>
+                    </div>
+                    <div class="col-12"><label class="form-check mt-1"><input type="checkbox" name="notify" value="1" class="form-check-input" checked> <span class="form-check-label small">Email me when it's due (needs a time)</span></label></div>
+                </div>
+                <input type="hidden" name="link_type"><input type="hidden" name="link_id">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger me-auto js-delete hidden">Delete</button>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ---------- List modal ---------- #}
+<div class="modal fade" id="listModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <form class="modal-content" method="post">
+            {{ csrf_field() }}<input type="hidden" name="action" value="list-save"><input type="hidden" name="id">
+            <div class="modal-header"><h5 class="modal-title">List</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="d-flex gap-2 mb-2"><input name="icon" class="form-control text-center" style="width:64px" placeholder="🙂" maxlength="4"><input name="name" class="form-control" placeholder="Name" required></div>
+                <input type="color" name="color" class="form-control form-control-color w-100" value="#3b7ddd">
+            </div>
+            <div class="modal-footer">
+                <button type="submit" form="listDelete" class="btn btn-outline-danger me-auto js-list-del hidden">Delete</button>
+                <button class="btn btn-primary">Save</button>
+            </div>
+        </form>
+        <form method="post" id="listDelete" data-confirm="Delete this list? Its reminders stay.">{{ csrf_field() }}<input type="hidden" name="action" value="list-delete"><input type="hidden" name="id"></form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const R = '/app/Ajax/reminders.php';
+let pt = null;
+$('#inlineQuick input[name=text]').on('input', function () {
+    const v = this.value; clearTimeout(pt);
+    pt = setTimeout(() => { if (!v.trim()) { $('#inlinePreview').html(''); return; } api(R, { action: 'parse', text: v }, { quiet: true }).then(r => $('#inlinePreview').html(r.html)); }, 200);
+});
+$('#inlineQuick').on('submit', function (e) {
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(this)); d.action = 'quick';
+    if (!d.text.trim()) return;
+    api(R, d).then(r => { ShowAlert(r.message, 'success'); setTimeout(() => location.reload(), 350); });
+});
+$(document).on('click', '.js-done', function () {
+    const row = $(this).closest('.reminder'), btn = $(this);
+    btn.addClass('done').html(feather.icons.check.toSvg({ width: 12, height: 12 }));
+    api(R, { action: 'complete', id: row.data('id') }).then(r => {
+        row.addClass('row-done');
+        ShowAlert(r.message, 'success');
+        setTimeout(() => row.slideUp(250), r.next ? 500 : 900);
+    }, () => btn.removeClass('done').html(''));
+});
+$(document).on('click', '.js-reopen', function () {
+    api(R, { action: 'reopen', id: $(this).closest('.reminder').data('id') }).then(() => location.reload());
+});
+$(document).on('click', '.js-snooze', function (e) {
+    e.preventDefault();
+    const row = $(this).closest('.reminder');
+    api(R, { action: 'snooze', id: row.data('id'), until: $(this).data('until') }).then(r => { ShowAlert(r.message, 'info'); row.slideUp(200); });
+});
+function toggleRepeat() {
+    const v = $('#remForm [name=repeat]').val();
+    $('#customRepeat').toggleClass('hidden', v !== 'custom');
+    $('#repeatMore').toggleClass('hidden', !v);
+    $('#repeatDays').toggleClass('hidden', $('#remForm [name=repeat_unit]').val() !== 'week');
+}
+$('#remForm [name=repeat], #remForm [name=repeat_unit]').on('change', toggleRepeat);
+function openReminder(id) {
+    const f = $('#remForm')[0]; f.reset(); f.id.value = '';
+    $('#remForm .js-delete').toggleClass('hidden', !id);
+    $('#remForm [name="repeat_days[]"]').prop('checked', false);
+    {% if data.list %}f.list_id.value = '{{ data.list.id }}';{% endif %}
+    const show = () => { toggleRepeat(); bootstrap.Modal.getOrCreateInstance(document.getElementById('remModal')).show(); };
+    if (!id) { show(); return; }
+    api(R, { action: 'get', id }).then(r => {
+        const x = r.reminder;
+        ['id', 'title', 'notes', 'due_date', 'due_time', 'repeat', 'repeat_interval', 'repeat_unit', 'repeat_from', 'repeat_until', 'list_id', 'priority', 'assigned_to', 'notify_before', 'link_type', 'link_id'].forEach(k => { if (f[k]) f[k].value = x[k] == null ? '' : x[k]; });
+        f.notify.checked = x.notify == 1;
+        (x.repeat_days || []).forEach(d => $('#remForm [name="repeat_days[]"][value=' + d + ']').prop('checked', true));
+        show();
+    });
+}
+$(document).on('click', '.js-edit', function () { openReminder($(this).closest('.reminder').data('id')); });
+$('.js-new-reminder').on('click', () => openReminder(null));
+$('#remForm').on('submit', function (e) {
+    e.preventDefault();
+    api(R, new FormData(this)).then(() => location.reload());
+});
+$('#remForm .js-delete').on('click', function () {
+    if (!confirm('Delete this reminder?')) return;
+    api(R, { action: 'delete', id: $('#remForm')[0].id.value }).then(() => location.reload());
+});
+$('.js-new-list').on('click', function (e) { e.preventDefault(); const f = $('#listModal form')[0]; f.reset(); f.id.value = ''; $('.js-list-del').addClass('hidden'); bootstrap.Modal.getOrCreateInstance(document.getElementById('listModal')).show(); });
+$('.js-edit-list').on('click', function (e) {
+    e.preventDefault(); const l = $(this).data('list'), f = $('#listModal form')[0];
+    f.id.value = l.id; f.name.value = l.name; f.icon.value = l.icon || ''; f.color.value = l.color || '#3b7ddd';
+    $('#listDelete [name=id]').val(l.id); $('.js-list-del').removeClass('hidden');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('listModal')).show();
+});
+{% if data.open %}openReminder({{ data.open }});{% endif %}
+</script>
+{% endblock %}

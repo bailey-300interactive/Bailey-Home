@@ -1,0 +1,69 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Users</h1><div class="sub">Everyone shares reminders, money and time tracking. Each person's vault is their own and only they can open it.</div></div>
+    <div class="actions"><button class="btn btn-primary js-user" data-user='{}'><i data-feather="user-plus"></i> Add person</button></div>
+</div>
+<div class="card card-flush">
+    <table class="table table-hover mb-0">
+        <thead><tr><th>Person</th><th>Role</th><th>2-step</th><th>Vault</th><th>Last sign-in</th><th></th></tr></thead>
+        <tbody>
+        {% for u in data.users %}
+            <tr class="{{ not u.active ? 'opacity-50' }}">
+                <td><div class="d-flex align-items-center gap-2"><span class="avatar-initials">{{ (u.first_name ~ ' ' ~ u.last_name)|initials }}</span><div><div class="fw-600">{{ u.first_name }} {{ u.last_name }}</div><div class="small-muted">{{ u.email ?: u.username }}</div></div></div></td>
+                <td>{{ u.level_name }}{% if u.locked_until and u.locked_until > 'now'|date('Y-m-d H:i:s', 'UTC') %} <span class="chip chip-red">locked</span>{% endif %}</td>
+                <td>{% if u.totp_enabled %}<span class="chip chip-green">On</span>{% else %}<span class="chip">Off</span>{% endif %}</td>
+                <td>{{ u.has_vault ? 'Set up' : '—' }}</td>
+                <td class="small">{{ u.last_login ? u.last_login|ago : 'never' }}</td>
+                <td class="text-end"><button class="btn btn-light btn-sm js-user" data-user="{{ u|merge({'password': null, 'totp_secret': null, 'reset_token': null})|json_encode }}">Edit</button></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" id="userForm">
+                {{ csrf_field() }}<input type="hidden" name="action" value="user-save"><input type="hidden" name="id">
+                <div class="modal-header"><h5 class="modal-title">Person</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body"><div class="row g-2">
+                    <div class="col-6"><label class="form-label">First name</label><input name="first_name" class="form-control" required></div>
+                    <div class="col-6"><label class="form-label">Last name</label><input name="last_name" class="form-control"></div>
+                    <div class="col-12"><label class="form-label">Email (sign-in)</label><input name="email" type="email" class="form-control" required></div>
+                    <div class="col-6"><label class="form-label">Role</label><select name="auth_level" class="form-select"><option value="10">Member</option><option value="0">Administrator</option></select></div>
+                    <div class="col-6"><label class="form-label">Hourly rate</label><input name="hourly_rate" class="form-control" inputmode="decimal"></div>
+                    <div class="col-12"><label class="form-label">Title</label><input name="title" class="form-control"></div>
+                    <div class="col-12"><label class="form-label">Password</label><input name="password" type="password" class="form-control" autocomplete="new-password" placeholder="Leave empty to email them a link"></div>
+                    <div class="col-12"><label class="form-check"><input type="checkbox" name="active" value="1" class="form-check-input" checked> <span class="form-check-label">Can sign in</span></label></div>
+                </div></div>
+                <div class="modal-footer"><button class="btn btn-primary">Save</button></div>
+            </form>
+            <div class="modal-body border-top js-existing small">
+                <div class="d-flex flex-wrap gap-2">
+                    <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="user-unlock"><input type="hidden" name="id"><button class="btn btn-light btn-sm">Unlock login</button></form>
+                    <form method="post" data-confirm="Turn off two-step verification for this person?">{{ csrf_field() }}<input type="hidden" name="action" value="user-2fa-off"><input type="hidden" name="id"><button class="btn btn-light btn-sm">Turn off 2-step</button></form>
+                </div>
+                <form method="post" class="mt-3 d-flex gap-2 align-items-center" data-confirm="Erase this person's vault? Everything in it is gone for good.">
+                    {{ csrf_field() }}<input type="hidden" name="action" value="user-reset-vault"><input type="hidden" name="id">
+                    <span class="text-muted">Lost master password and recovery code?</span><input name="confirm" class="form-control form-control-sm" style="width:110px" placeholder="type ERASE"><button class="btn btn-outline-danger btn-sm text-nowrap">Erase vault</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+$(document).on('click', '.js-user', function () {
+    const u = $(this).data('user') || {}, f = $('#userForm')[0];
+    f.reset(); f.id.value = u.Id_admin_users || '';
+    ['first_name', 'last_name', 'title', 'hourly_rate'].forEach(k => { if (u[k] != null) f[k].value = u[k]; });
+    f.email.value = u.email || u.username || ''; f.auth_level.value = u.auth_level != null ? u.auth_level : 10;
+    f.active.checked = u.Id_admin_users ? u.active == 1 : true;
+    $('.js-existing').toggleClass('hidden', !u.Id_admin_users).find('[name=id]').val(u.Id_admin_users || '');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('userModal')).show();
+});
+</script>
+{% endblock %}

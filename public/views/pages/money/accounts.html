@@ -1,0 +1,108 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Accounts</h1><div class="sub">Net worth {{ data.net.net|money }} · {{ data.net.assets|money }} assets · {{ data.net.debts|abs|money }} owed</div></div>
+    <div class="actions"><button class="btn btn-primary js-acct" data-acct='{}'><i data-feather="plus"></i> Add account</button></div>
+</div>
+
+{% if data.series.values|length %}
+<div class="card">
+    <div class="card-header"><h5 class="card-title">Net worth, last 12 months</h5></div>
+    <div class="card-body pt-2"><div id="nwChart" style="height:220px"></div></div>
+</div>
+{% endif %}
+
+<div class="row g-3">
+    {% for a in data.all_accounts %}
+        <div class="col-sm-6 col-xl-4">
+            <div class="card h-100 mb-0 {{ a.archived ? 'opacity-50' }}">
+                <div class="acct-card m-2" style="background:linear-gradient(135deg, {{ a.color ?: '#3b7ddd' }}, {{ a.color ?: '#3b7ddd' }}cc)">
+                    <div class="t">{{ data.account_types[a.type] }}{{ a.last4 ? ' ·••• ' ~ a.last4 }}</div>
+                    <div class="n">{{ a.name }}</div>
+                    <div class="b">{{ a.balance|money }}</div>
+                </div>
+                <div class="card-body pt-2 pb-3 d-flex align-items-center gap-2 flex-wrap small">
+                    <span class="text-muted">{{ a.institution }}{{ a.institution ? ' · ' }}{{ a.tx_count }} transactions{% if a.last_tx %} · last {{ a.last_tx|nicedate('M j') }}{% endif %}</span>
+                    {% if a.credit_limit %}<div class="w-100"><div class="bar {{ (a.balance|abs) / a.credit_limit > 0.3 ? 'warn' : 'ok' }}"><span style="width:{{ min(100, ((a.balance|abs) / a.credit_limit * 100)|round) }}%"></span></div><div class="small-muted mt-1">{{ ((a.balance|abs) / a.credit_limit * 100)|round }}% of {{ a.credit_limit|money }} limit used</div></div>{% endif %}
+                    <div class="ms-auto d-flex gap-1">
+                        <a href="/money/transactions?account={{ a.id }}" class="btn btn-light btn-sm">Transactions</a>
+                        <button class="btn btn-light btn-sm js-reconcile" data-id="{{ a.id }}" data-name="{{ a.name }}" data-balance="{{ a.balance|abs }}">Update balance</button>
+                        <button class="btn btn-light btn-sm js-acct" data-acct="{{ a|json_encode }}"><i data-feather="edit-2"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="col-12"><div class="card"><div class="empty"><div class="big">🏦</div>No accounts yet.</div></div></div>
+    {% endfor %}
+</div>
+
+<div class="modal fade" id="acctModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" method="post" id="acctForm">
+            {{ csrf_field() }}<input type="hidden" name="action" value="account-save"><input type="hidden" name="id">
+            <div class="modal-header"><h5 class="modal-title">Account</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body"><div class="row g-2">
+                <div class="col-8"><label class="form-label">Name</label><input name="name" class="form-control" required placeholder="Chase Checking"></div>
+                <div class="col-4"><label class="form-label">Color</label><input type="color" name="color" class="form-control form-control-color w-100" value="#3b7ddd"></div>
+                <div class="col-6"><label class="form-label">Type</label><select name="type" class="form-select">{% for k, v in data.account_types %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+                <div class="col-6"><label class="form-label">Bank</label><input name="institution" class="form-control"></div>
+                <div class="col-6"><label class="form-label">Starting balance</label><input name="opening_balance" class="form-control input-money" inputmode="decimal" placeholder="0.00"><div class="form-text">For cards and loans, what you owe.</div></div>
+                <div class="col-6"><label class="form-label">As of</label><input type="date" name="opening_date" class="form-control"></div>
+                <div class="col-6"><label class="form-label">Last 4 digits</label><input name="last4" class="form-control" maxlength="4" inputmode="numeric"></div>
+                <div class="col-6"><label class="form-label">Credit limit</label><input name="credit_limit" class="form-control input-money" inputmode="decimal"></div>
+                <div class="col-12 d-flex gap-3 mt-2">
+                    <label class="form-check"><input type="checkbox" name="in_net_worth" value="1" class="form-check-input" checked> <span class="form-check-label">Count in net worth</span></label>
+                    <label class="form-check"><input type="checkbox" name="archived" value="1" class="form-check-input"> <span class="form-check-label">Archived</span></label>
+                </div>
+            </div></div>
+            <div class="modal-footer">
+                <button type="submit" form="acctDelete" class="btn btn-outline-danger me-auto js-acct-del hidden">Delete</button>
+                <button class="btn btn-primary">Save</button>
+            </div>
+        </form>
+        <form method="post" id="acctDelete" data-confirm="Delete this account?">{{ csrf_field() }}<input type="hidden" name="action" value="account-delete"><input type="hidden" name="id"></form>
+    </div>
+</div>
+
+<div class="modal fade" id="recModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <form class="modal-content" method="post">
+            {{ csrf_field() }}<input type="hidden" name="action" value="account-reconcile"><input type="hidden" name="id">
+            <div class="modal-header"><h5 class="modal-title">Update balance</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body"><p class="small text-muted">Type the balance your bank shows today. A "Balance adjustment" makes up the difference.</p><input name="balance" class="form-control form-control-lg input-money" inputmode="decimal"></div>
+            <div class="modal-footer"><button class="btn btn-primary">Update</button></div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).on('click', '.js-acct', function () {
+    const a = $(this).data('acct') || {}, f = $('#acctForm')[0];
+    f.reset(); f.id.value = a.id || '';
+    ['name', 'color', 'type', 'institution', 'opening_date', 'last4', 'credit_limit'].forEach(k => { if (a[k] != null) f[k].value = a[k]; });
+    if (a.opening_balance != null) f.opening_balance.value = Math.abs(a.opening_balance);
+    f.in_net_worth.checked = a.id ? a.in_net_worth == 1 : true; f.archived.checked = a.archived == 1;
+    $('#acctDelete [name=id]').val(a.id || ''); $('.js-acct-del').toggleClass('hidden', !a.id || a.tx_count > 0);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('acctModal')).show();
+});
+$(document).on('click', '.js-reconcile', function () {
+    const f = $('#recModal form')[0]; f.id.value = $(this).data('id'); f.balance.value = Number($(this).data('balance')).toFixed(2);
+    $('#recModal .modal-title').text('Update ' + $(this).data('name'));
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('recModal')).show();
+});
+if (new URLSearchParams(location.search).get('new')) $('.js-acct').first().trigger('click');
+const nw = {{ data.series|js }};
+chart('#nwChart', {
+    chart: { type: 'area', height: 220 },
+    series: [{ name: 'Net worth', data: nw.values }],
+    fill: { type: 'gradient', gradient: { opacityFrom: 0.25, opacityTo: 0.02 } },
+    xaxis: { categories: nw.labels },
+    yaxis: { labels: { formatter: moneyShort } },
+    tooltip: { y: { formatter: v => fmtMoney(v) } },
+    markers: { size: 0, hover: { size: 5 } },
+});
+</script>
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Categories & rules</h1><div class="sub">Rules categorize (and tidy up the names of) imported and typed-in transactions automatically.</div></div>
+    <div class="actions"><button class="btn btn-primary js-cat" data-cat='{"kind":"expense"}'><i data-feather="plus"></i> Category</button></div>
+</div>
+<div class="row">
+    <div class="col-lg-6">
+        {% for kind, label in {'expense': 'Spending', 'income': 'Income'} %}
+            <div class="card card-flush">
+                <div class="card-header"><h5 class="card-title">{{ label }}</h5></div>
+                {% for c in data.all_categories|filter(c => c.kind == kind) %}
+                    <div class="list-row cursor-pointer js-cat {{ c.archived ? 'opacity-50' }}" data-cat="{{ c|json_encode }}">
+                        <span class="emoji-badge" style="background:{{ c.color }}22">{{ c.icon }}</span>
+                        <div class="grow"><div class="title">{{ c.name }}</div><div class="meta">{{ c.n }} transactions{% if c.budget %} · {{ c.budget|money }}/month budget{% endif %}{% if c.archived %} · archived{% endif %}</div></div>
+                        <i data-feather="chevron-right" class="text-muted"></i>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    </div>
+    <div class="col-lg-6">
+        <div class="card card-flush">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">Rules</h5>
+                <form method="post" class="ms-auto">{{ csrf_field() }}<input type="hidden" name="action" value="rules-apply"><button class="btn btn-light btn-sm">Run on uncategorized</button></form>
+            </div>
+            <div class="card-body border-bottom">
+                <form method="post" class="row g-2">
+                    {{ csrf_field() }}<input type="hidden" name="action" value="rule-save">
+                    <div class="col-md-4"><input name="match_text" class="form-control form-control-sm" placeholder="When payee has…" required></div>
+                    <div class="col-md-4"><select name="category_id" class="form-select form-select-sm"><option value="">Category…</option>{% for c in data.categories %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}</select></div>
+                    <div class="col-md-4"><input name="rename_to" class="form-control form-control-sm" placeholder="Rename to (optional)"></div>
+                    <div class="col-12 d-flex align-items-center"><label class="form-check mb-0"><input type="checkbox" name="apply" value="1" class="form-check-input" checked> <span class="form-check-label small">Also apply to uncategorized now</span></label><button class="btn btn-primary btn-sm ms-auto">Add rule</button></div>
+                </form>
+            </div>
+            {% for r in data.rules %}
+                <div class="list-row">
+                    <div class="grow"><div class="title">“{{ r.match_text }}”</div><div class="meta">→ {{ r.icon }} {{ r.category_name ?: 'no category' }}{% if r.rename_to %} · rename to “{{ r.rename_to }}”{% endif %}</div></div>
+                    <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="rule-delete"><input type="hidden" name="id" value="{{ r.id }}"><button class="btn btn-light btn-sm text-danger"><i data-feather="x"></i></button></form>
+                </div>
+            {% else %}
+                <div class="empty py-4">No rules yet. When you pick a category for a payee you can make one in a click.</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="catModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <form class="modal-content" method="post" id="catForm">
+            {{ csrf_field() }}<input type="hidden" name="action" value="category-save"><input type="hidden" name="id">
+            <div class="modal-header"><h5 class="modal-title">Category</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="d-flex gap-2 mb-2"><input name="icon" class="form-control text-center" style="width:64px" maxlength="4" placeholder="🏷️"><input name="name" class="form-control" required placeholder="Name"></div>
+                <div class="mb-2"><select name="kind" class="form-select"><option value="expense">Spending</option><option value="income">Income</option></select></div>
+                <div class="mb-2"><label class="form-label">Monthly budget</label><input name="budget" class="form-control input-money" inputmode="decimal" placeholder="none"></div>
+                <div class="mb-2"><input type="color" name="color" class="form-control form-control-color w-100" value="#3b7ddd"></div>
+                <label class="form-check"><input type="checkbox" name="archived" value="1" class="form-check-input"> <span class="form-check-label">Archived (hide from lists)</span></label>
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary">Save</button></div>
+        </form>
+        <form method="post" class="modal-content mt-2 js-cat-del hidden" data-confirm="Delete this category?">
+            {{ csrf_field() }}<input type="hidden" name="action" value="category-delete"><input type="hidden" name="id">
+            <div class="modal-body d-flex gap-2 align-items-center">
+                <select name="move_to" class="form-select form-select-sm"><option value="">Move its transactions to: none</option>{% for c in data.categories %}<option value="{{ c.id }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}</select>
+                <button class="btn btn-sm btn-outline-danger text-nowrap">Delete</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+$(document).on('click', '.js-cat', function () {
+    const c = $(this).data('cat') || {}, f = $('#catForm')[0];
+    f.reset(); f.id.value = c.id || '';
+    ['icon', 'name', 'kind', 'budget', 'color'].forEach(k => { if (c[k] != null) f[k].value = c[k]; });
+    f.archived.checked = c.archived == 1;
+    $('.js-cat-del [name=id]').val(c.id || ''); $('.js-cat-del').toggleClass('hidden', !c.id);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('catModal')).show();
+});
+</script>
+{% endblock %}

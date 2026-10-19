@@ -1,0 +1,89 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Money reports</h1><div class="sub">{{ data.from|nicedate }} – {{ data.to|nicedate }}</div></div>
+    <div class="actions">
+        <div class="seg">
+            {% for k, v in {'month': 'This month', 'last-month': 'Last month', '3m': '3 months', 'ytd': 'This year', '12m': '12 months', 'last-year': 'Last year'} %}
+                <a href="?range={{ k }}" class="{{ data.range == k ? 'active' }}">{{ v }}</a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4"><div class="card kpi mb-0"><div class="label">Income</div><div class="value money">{{ data.totals.income|money }}</div></div></div>
+    <div class="col-md-4"><div class="card kpi mb-0"><div class="label">Spending</div><div class="value money">{{ data.totals.spent|money }}</div></div></div>
+    <div class="col-md-4"><div class="card kpi mb-0"><div class="label">Saved</div><div class="value money {{ data.totals.income - data.totals.spent < 0 ? 'neg' : 'pos' }}">{{ (data.totals.income - data.totals.spent)|money(null, true) }}</div>
+        <div class="foot">{{ data.totals.income > 0 ? ((data.totals.income - data.totals.spent) / data.totals.income * 100)|round ~ '% savings rate' }}</div></div></div>
+</div>
+
+<div class="row">
+    <div class="col-xl-7">
+        <div class="card">
+            <div class="card-header"><h5 class="card-title">Spending by category</h5></div>
+            <div class="card-body pt-2">
+                {% if data.by_category %}<div id="catBars" style="height:{{ 60 + data.by_category|length * 34 }}px"></div>{% else %}<div class="empty">No spending in this period.</div>{% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-5">
+        <div class="card card-flush">
+            <div class="card-header"><h5 class="card-title">Top places</h5></div>
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Payee</th><th class="text-end">Times</th><th class="text-end">Total</th></tr></thead>
+                <tbody>{% for p in data.payees %}<tr><td><a href="/money/transactions?q={{ p.payee|url_encode }}">{{ p.payee }}</a></td><td class="text-end text-muted">{{ p.n }}</td><td class="text-end money fw-600">{{ p.total|money }}</td></tr>{% else %}<tr><td colspan="3" class="text-muted text-center py-3">Nothing yet</td></tr>{% endfor %}</tbody>
+            </table>
+        </div>
+        {% if data.business %}
+        <div class="card card-flush">
+            <div class="card-header"><h5 class="card-title">Spending for clients</h5></div>
+            <table class="table table-sm mb-0"><tbody>{% for b in data.business %}<tr><td>{{ b.client }}</td><td class="text-end money">{{ b.spent|money }}</td></tr>{% endfor %}</tbody></table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h5 class="card-title">Each month, last 12 months</h5></div>
+    <div class="card-body pt-2"><div id="m12" style="height:280px"></div></div>
+    <div class="table-responsive border-top">
+        <table class="table table-sm mb-0">
+            <thead><tr><th></th>{% for l in data.monthly.labels %}<th class="text-end">{{ l }}</th>{% endfor %}</tr></thead>
+            <tbody>
+                <tr><td class="fw-600">Income</td>{% for v in data.monthly.income %}<td class="text-end money">{{ v|money|replace({'.00': ''}) }}</td>{% endfor %}</tr>
+                <tr><td class="fw-600">Spending</td>{% for v in data.monthly.expense %}<td class="text-end money">{{ v|money|replace({'.00': ''}) }}</td>{% endfor %}</tr>
+                <tr><td class="fw-600">Net</td>{% for v in data.monthly.net %}<td class="text-end money {{ v < 0 ? 'neg' : 'pos' }}">{{ v|money(null, true)|replace({'.00': ''}) }}</td>{% endfor %}</tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const cats = {{ data.by_category|js }};
+const total = cats.reduce((a, c) => a + Number(c.total), 0);
+chart('#catBars', {
+    chart: { type: 'bar', height: 60 + cats.length * 34, events: { dataPointSelection: (e, c, o) => { const id = cats[o.dataPointIndex].id; if (id) location = '/money/transactions?category=' + id + '&from={{ data.from }}&to={{ data.to }}'; } } },
+    series: [{ name: 'Spent', data: cats.map(c => Math.round(c.total * 100) / 100) }],
+    colors: cats.map(c => c.color),
+    plotOptions: { bar: { horizontal: true, distributed: true, barHeight: '62%', borderRadius: 4, borderRadiusApplication: 'end', dataLabels: { position: 'top' } } },
+    dataLabels: { enabled: true, formatter: v => moneyShort(v) + '  ' + Math.round(v / total * 100) + '%', offsetX: 46, style: { colors: ['#495057'], fontWeight: 500, fontSize: '11px' } },
+    legend: { show: false },
+    xaxis: { categories: cats.map(c => (c.icon ? c.icon + ' ' : '') + c.name), labels: { formatter: moneyShort } },
+    grid: { xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } }, padding: { right: 60 } },
+    tooltip: { y: { formatter: v => fmtMoney(v) } },
+});
+const m = {{ data.monthly|js }};
+chart('#m12', {
+    chart: { type: 'bar', height: 280 },
+    series: [{ name: 'Income', data: m.income }, { name: 'Spending', data: m.expense }],
+    colors: [SERIES[2], SERIES[1]],
+    plotOptions: { bar: { columnWidth: '60%', borderRadius: 4, borderRadiusApplication: 'end' } },
+    stroke: { show: true, width: 2, colors: ['transparent'] },
+    xaxis: { categories: m.labels },
+    yaxis: { labels: { formatter: moneyShort } },
+    tooltip: { shared: true, intersect: false, y: { formatter: v => fmtMoney(v) } },
+});
+</script>
+{% endblock %}

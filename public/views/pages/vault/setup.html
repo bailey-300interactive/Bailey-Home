@@ -1,0 +1,49 @@
+{% extends "bases/base-admin.html" %}
+{% block body %}
+<div class="row justify-content-center">
+    <div class="col-lg-7 col-xl-6">
+        <div class="text-center mb-4 mt-3">
+            <div class="lock-icon"><i data-feather="shield" style="width:34px;height:34px"></i></div>
+            <h1 class="h3 fw-bold mb-1">Set up your vault</h1>
+            <p class="text-muted">Pick a master password. It unlocks your saved passwords and is never stored anywhere, so no one, not even the server, can read your vault without it.</p>
+        </div>
+        <div class="card">
+            <div class="card-body p-4">
+                <form method="post" id="setupForm" autocomplete="off">
+                    {{ csrf_field() }}<input type="hidden" name="action" value="setup">
+                    <div class="mb-3">
+                        <label class="form-label">Master password</label>
+                        <div class="input-group">
+                            <input type="password" name="master" id="master" class="form-control form-control-lg" autocomplete="new-password" required minlength="12">
+                            <button type="button" class="btn btn-light js-suggest" title="Suggest one"><i data-feather="refresh-cw"></i></button>
+                            <button type="button" class="btn btn-light js-show" title="Show"><i data-feather="eye"></i></button>
+                        </div>
+                        <div class="strength s0" id="meter"><span></span><span></span><span></span><span></span><span></span></div>
+                        <div class="form-text">Use 4 or more random words, like <em>maple-orbit-tuesday-glass</em>. Make it different from your login password.</div>
+                    </div>
+                    <div class="mb-3"><label class="form-label">Type it again</label><input type="password" name="master2" class="form-control form-control-lg" autocomplete="new-password" required></div>
+                    <div class="mb-4"><label class="form-label">Hint <span class="text-muted fw-normal">(optional, shown on the lock screen)</span></label><input type="text" name="hint" class="form-control" maxlength="128"></div>
+                    <div class="alert alert-info d-flex gap-2 p-3 small mb-4" style="border-radius:10px">
+                        <i data-feather="info" class="flex-none"></i>
+                        <div>Next you'll get a <strong>recovery code</strong>. It's the only other way back in if you forget the master password. Print it or put it somewhere safe.</div>
+                    </div>
+                    <div class="d-grid"><button class="btn btn-lg btn-primary">Create my vault</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/public/assets/js/vault.js?v=1"></script>
+<script>
+    $('#master').on('input', function () { meter('#meter', this.value); });
+    $('.js-show').on('click', () => $('#setupForm input[type=password], #setupForm input.shown').each(function () { this.type = this.type === 'password' ? 'text' : 'password'; $(this).toggleClass('shown'); }));
+    $('.js-suggest').on('click', function () {
+        const p = passphrase(5);
+        $('#master').val(p).attr('type', 'text').trigger('input');
+        $('[name=master2]').val('');
+        ShowAlert('Suggested: write it down, then type it again below', 'info', null, null, 6000);
+    });
+</script>
+{% endblock %}

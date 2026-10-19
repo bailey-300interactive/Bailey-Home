@@ -1,0 +1,20 @@
+<?php
+
+/**
+ * Optional. Only needed if your old bailey_accounts app stored passwords encrypted
+ * (not as plain text). Copy this to settings/legacy-decrypt.php and make the function
+ * return the plain-text password. The Vault importer calls it for every row.
+ *
+ * Example for openssl_encrypt with AES-256-CBC and a base64 "iv:ciphertext" value:
+ *
+ *   function legacy_decrypt($value) {
+ *       $key = 'the key your old app used';
+ *       [$iv, $ct] = explode(':', $value, 2);
+ *       return openssl_decrypt($ct, 'aes-256-cbc', $key, 0, base64_decode($iv));
+ *   }
+ */
+
+function legacy_decrypt($value)
+{
+    return $value;
+}

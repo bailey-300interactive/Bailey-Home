@@ -1,0 +1,59 @@
+{% extends "bases/base.html" %}
+{% block title %}Sign in{% endblock %}
+
+{% block body %}
+<div class="auth-card">
+    <div class="auth-brand"><img src="/public/assets/img/icon-192.png" class="brand-mark" alt=""> {{ base.site_profile.site_name }}</div>
+    <div class="card">
+        <div class="card-body p-4">
+            <form id="login-form" autocomplete="on">
+                <h1 class="h4 mb-1">Welcome back</h1>
+                <p class="text-muted mb-4">Sign in to continue.</p>
+                <div class="mb-3">
+                    <label class="form-label" for="username">Email</label>
+                    <input class="form-control form-control-lg" type="email" id="username" name="username" autocomplete="username" required autofocus>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label" for="password">Password</label>
+                    <input class="form-control form-control-lg" type="password" id="password" name="password" autocomplete="current-password" required>
+                </div>
+                <div class="mb-3 text-end"><a href="/reset-password" class="small">Forgot password?</a></div>
+                <div class="d-grid"><button type="submit" class="btn btn-lg btn-primary">Sign in</button></div>
+            </form>
+
+            <form id="totp-form" class="hidden" autocomplete="off">
+                <h1 class="h4 mb-1">Two-step verification</h1>
+                <p class="text-muted mb-4">Enter the 6-digit code from your authenticator app.</p>
+                <input class="form-control form-control-lg otp-input mb-3" type="text" name="code" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" autocomplete="one-time-code" required>
+                <div class="d-grid"><button type="submit" class="btn btn-lg btn-primary">Verify</button></div>
+                <div class="text-center mt-3"><a href="/login" class="small">Start over</a></div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function () {
+    $('#login-form').on('submit', function (e) {
+        e.preventDefault();
+        const btn = $(this).find('button').prop('disabled', true);
+        api('/app/Ajax/authentication.php', { action: 'login', username: $('#username').val(), password: $('#password').val() })
+            .then(function (r) {
+                if (r.twofa) { $('#login-form').addClass('hidden'); $('#totp-form').removeClass('hidden').find('input').trigger('focus'); return; }
+                window.location = r.redirect || '/';
+            }).always(() => btn.prop('disabled', false));
+    });
+    $('#totp-form').on('submit', function (e) {
+        e.preventDefault();
+        const btn = $(this).find('button').prop('disabled', true);
+        api('/app/Ajax/authentication.php', { action: 'totp', code: $(this).find('[name=code]').val() }, { quiet: true })
+            .then(r => window.location = r.redirect || '/', function (r) {
+                ShowAlert(r.message || 'That code did not work', 'error');
+                if (r.restart) setTimeout(() => window.location = '/login', 1500);
+            }).always(() => btn.prop('disabled', false));
+    });
+});
+</script>
+{% endblock %}

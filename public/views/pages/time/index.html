@@ -1,0 +1,140 @@
+{% extends "bases/base-admin.html" %}
+{% set t = data.timer %}
+{% block body %}
+<div class="page-head">
+    <div><h1>Time</h1><div class="sub">{{ data.from == data.to ? data.from|nicedate('l, M j') : data.from|nicedate('M j') ~ ' – ' ~ data.to|nicedate('M j, Y') }}</div></div>
+    <div class="actions">
+        <div class="seg">
+            {% for k, v in {'day': 'Day', 'week': 'Week', 'month': 'Month'} %}<a href="?range={{ k }}&date={{ data.date }}" class="{{ data.range == k ? 'active' }}">{{ v }}</a>{% endfor %}
+        </div>
+        <div class="btn-group"><a class="btn btn-light" href="?range={{ data.range }}&date={{ data.prev }}">‹</a><a class="btn btn-light" href="?range={{ data.range }}">Today</a><a class="btn btn-light" href="?range={{ data.range }}&date={{ data.next }}">›</a></div>
+        <a href="/time/timesheet" class="btn btn-light"><i data-feather="grid"></i> Timesheet</a>
+        <button class="btn btn-primary js-entry"><i data-feather="plus"></i> Log time</button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-xl-8">
+        {# ---- Timer ---- #}
+        <div class="card timer-card">
+            <div class="card-body p-4">
+                <form id="timerForm" class="d-flex flex-wrap align-items-center gap-3" autocomplete="off">
+                    <div class="grow" style="min-width:240px">
+                        <input name="notes" class="form-control form-control-lg mb-2" placeholder="What are you working on?" value="{{ t.notes }}">
+                        <div class="d-flex gap-2">
+                            <select name="project_id" class="form-select">
+                                <option value="">No project</option>
+                                {% for client, ps in data.project_options %}<optgroup label="{{ client }}">{% for p in ps %}<option value="{{ p.id }}" {{ t and t.project_id == p.id ? 'selected' }}>{{ p.name }}</option>{% endfor %}</optgroup>{% endfor %}
+                            </select>
+                            <select name="service_id" class="form-select" style="max-width:200px">
+                                <option value="">Service</option>
+                                {% for s in data.services %}<option value="{{ s.id }}" {{ t and t.service_id == s.id ? 'selected' }}>{{ s.name }}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <div class="clock" {% if t %}data-start="{{ t.started_ts }}"{% endif %}>{{ t ? t.elapsed|hm ~ ':00' : '0:00:00' }}</div>
+                        <div class="muted small mt-1">{{ t ? 'started ' ~ t.started_at|local('g:i A') : 'ready' }}</div>
+                    </div>
+                    {% if t %}
+                        <button type="button" class="btn-start btn-stop js-timer-stop" title="Stop"><i data-feather="square"></i></button>
+                    {% else %}
+                        <button class="btn-start" title="Start"><i data-feather="play"></i></button>
+                    {% endif %}
+                </form>
+                {% if not t and data.recent %}
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        <span class="muted small align-self-center">Jump back in:</span>
+                        {% for r in data.recent %}
+                            <button type="button" class="btn btn-sm js-recent" style="background:rgba(255,255,255,.1);color:#fff;border-radius:99px" data-project="{{ r.project_id }}" data-service="{{ r.service_id }}">
+                                <span class="color-dot" style="background:{{ r.color }}"></span> {{ r.project_name }}{{ r.service_name ? ' · ' ~ r.service_name }}
+                            </button>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ---- Entries ---- #}
+        {% for day, d in data.days %}
+            <div class="card card-flush">
+                <div class="entry-day"><span>{{ day|relday }}{{ day|relday != day|nicedate('M j') ? ' · ' ~ day|nicedate('M j') }}</span><span class="dur">{{ d.seconds|hm }}</span></div>
+                {% for e in d.entries %}
+                    <div class="list-row cursor-pointer js-entry" data-id="{{ e.id }}">
+                        <span class="color-dot" style="background:{{ e.project_color ?: e.client_color ?: '#adb5bd' }};width:12px;height:12px"></span>
+                        <div class="grow">
+                            <div class="title truncate">{{ e.notes ?: (e.service_name ?: 'No notes') }}</div>
+                            <div class="meta">
+                                <span class="fw-600">{{ e.client_name ?: 'No client' }}</span>{% if e.project_name %}<span>{{ e.project_name }}</span>{% endif %}
+                                {% if e.service_name and e.notes %}<span>{{ e.service_name }}</span>{% endif %}
+                                {% if data.who is null %}<span>{{ e.user_name }}</span>{% endif %}
+                                {% if e.invoice_number %}<span class="chip chip-green">{{ e.invoice_number }}</span>{% elseif e.project_billing == 'flat_fee' %}<span class="chip chip-blue">Flat fee</span>{% elseif not e.billable_effective %}<span class="chip">Non-billable</span>{% endif %}
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <div class="dur">{% if e.running %}<span class="text-success" data-start="{{ e.started_ts }}">{{ e.seconds|hm }}</span>{% else %}{{ e.seconds|hm }}{% endif %}</div>
+                            {% if e.value > 0 %}<div class="small-muted money">{{ e.value|money }}</div>{% endif %}
+                        </div>
+                        {% if not e.running %}<button class="btn btn-light btn-icon js-noentry js-resume" data-id="{{ e.id }}" title="Start a timer like this"><i data-feather="play"></i></button>{% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="card"><div class="empty"><div class="big">⏱️</div>No time logged {{ data.range == 'day' ? 'this day' : 'this ' ~ data.range }}. Start the timer or log some time.</div></div>
+        {% endfor %}
+    </div>
+
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="stat-strip" style="grid-template-columns:1fr 1fr">
+                    <div class="ps-0"><div class="l">Total</div><div class="v">{{ data.tot.seconds|hm }}</div></div>
+                    <div><div class="l">Billable</div><div class="v">{{ data.tot.billable|hm }}</div></div>
+                </div>
+                <div class="mt-3 mb-1 d-flex small"><span class="text-muted">Billable share</span><span class="ms-auto fw-600">{{ data.tot.seconds ? (data.tot.billable / data.tot.seconds * 100)|round : 0 }}%</span></div>
+                <div class="bar ok"><span style="width:{{ data.tot.seconds ? (data.tot.billable / data.tot.seconds * 100)|round : 0 }}%"></span></div>
+                <div class="d-flex align-items-end mt-3"><div><div class="small-muted">Billable value</div><div class="fs-3 fw-bold money">{{ data.tot.value|money }}</div></div></div>
+            </div>
+        </div>
+        <div class="card card-flush">
+            <div class="card-header"><h5 class="card-title">Filter</h5></div>
+            <div class="card-body">
+                <form method="get" class="js-autosubmit d-grid gap-2">
+                    <input type="hidden" name="range" value="{{ data.range }}"><input type="hidden" name="date" value="{{ data.date }}">
+                    <select name="user" class="form-select"><option value="{{ session.user_Id }}">My time</option><option value="all" {{ data.who is null ? 'selected' }}>Everyone</option></select>
+                    <select name="client" class="form-select"><option value="">All clients</option>{% for c in data.client_options %}<option value="{{ c.id }}" {{ data.client_filter == c.id ? 'selected' }}>{{ c.name }}</option>{% endfor %}</select>
+                </form>
+            </div>
+        </div>
+        <div class="card"><div class="card-body small text-muted">
+            <strong class="text-body">Shortcuts</strong><br>
+            <code class="k">T</code> log time anywhere · the ▶ on a row starts a new timer like it · type hours as <code class="k">1:30</code>, <code class="k">1.5</code> or <code class="k">90m</code>.
+        </div></div>
+    </div>
+</div>
+{% include 'partials/time-modal.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const T = '/app/Ajax/time.php';
+$('#timerForm').on('submit', function (e) {
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(this)); d.action = 'start';
+    api(T, d).then(() => location.reload());
+});
+// changing the project/notes while running updates the timer
+$('#timerForm').on('change', 'select, input', function () {
+    if (!document.querySelector('.timer-card [data-start]')) return;
+    const d = Object.fromEntries(new FormData(document.getElementById('timerForm'))); d.action = 'timer-update';
+    api(T, d, { quiet: true }).then(() => ShowAlert('Timer updated', 'success', null, null, 1200));
+});
+$('.js-recent').on('click', function () {
+    api(T, { action: 'start', project_id: $(this).data('project'), service_id: $(this).data('service') || '' }).then(() => location.reload());
+});
+$(document).on('click', '.js-resume', function (e) {
+    e.stopPropagation();
+    api(T, { action: 'resume', id: $(this).data('id') }).then(() => location.reload());
+});
+</script>
+{% endblock %}
