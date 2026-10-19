@@ -460,19 +460,26 @@ class Reminder
     public static function QueueDueAlerts()
     {
         $now = gmdate('Y-m-d H:i:s');
-        $list = rows("SELECT r.*, u.email, u.username, u.first_name, u.timezone FROM reminders r JOIN admin_users u ON u.Id_admin_users = COALESCE(r.assigned_to, r.created_by)
+        $list = rows("SELECT r.*, u.Id_admin_users AS uid, u.email, u.username, u.first_name, u.timezone, u.notify_reminders, u.sms_reminders, u.phone, u.phone_verified_at
+            FROM reminders r JOIN admin_users u ON u.Id_admin_users = COALESCE(r.assigned_to, r.created_by)
             WHERE r.status = 'open' AND r.notify = 1 AND r.notified_at IS NULL AND r.due_at IS NOT NULL AND r.due_time IS NOT NULL
               AND DATE_SUB(r.due_at, INTERVAL r.notify_before MINUTE) <= ? AND (r.snoozed_until IS NULL OR r.snoozed_until <= ?)
-              AND u.notify_reminders = 1 AND u.active = 1", array($now, $now));
+              AND (u.notify_reminders = 1 OR u.sms_reminders = 1) AND u.active = 1", array($now, $now));
         $n = 0;
         foreach ($list as $r) {
             $to = $r['email'] ?: $r['username'];
             $tz = new DateTimeZone($r['timezone'] ?: App::Setting('timezone', 'America/New_York'));
             $when = (new DateTime($r['due_at'], new DateTimeZone('UTC')))->setTimezone($tz);
-            Mailer::Queue($to, $r['first_name'], '⏰ ' . $r['title'], 'reminder', array(
-                'title' => $r['title'], 'notes' => $r['notes'], 'when' => $when->format('l, M j \a\t g:i A'),
-                'repeat' => self::RepeatText($r), 'url' => App::BaseUrl() . '/reminders?open=' . $r['id'], 'first_name' => $r['first_name']
-            ));
+            if ($r['notify_reminders']) {
+                Mailer::Queue($to, $r['first_name'], '⏰ ' . $r['title'], 'reminder', array(
+                    'title' => $r['title'], 'notes' => $r['notes'], 'when' => $when->format('l, M j \a\t g:i A'),
+                    'repeat' => self::RepeatText($r), 'url' => App::BaseUrl() . '/reminders?open=' . $r['id'], 'first_name' => $r['first_name']
+                ));
+            }
+            // Text only fresh alerts: a backlog (cron was down, texts just turned on) shouldn't fire a burst of stale texts
+            if ($r['sms_reminders'] && $r['phone'] && $r['phone_verified_at'] && $r['due_at'] >= gmdate('Y-m-d H:i:s', time() - 3 * 3600)) {
+                Sms::Queue($r['uid'], $r['phone'], 'Reminder: ' . $r['title'] . ' (' . $when->format('g:i A') . ')' . ($r['notes'] ? "\n" . mb_substr($r['notes'], 0, 120) : ''));
+            }
             run('UPDATE reminders SET notified_at = ? WHERE id = ?', array($now, $r['id']));
             $n++;
         }
@@ -485,7 +492,7 @@ class Reminder
     public static function QueueDigests()
     {
         $n = 0;
-        foreach (rows('SELECT * FROM admin_users WHERE active = 1 AND notify_digest = 1') as $u) {
+        foreach (rows('SELECT * FROM admin_users WHERE active = 1 AND (notify_digest = 1 OR (sms_digest = 1 AND phone_verified_at IS NOT NULL))') as $u) {
             $tz = new DateTimeZone($u['timezone'] ?: App::Setting('timezone', 'America/New_York'));
             $local = new DateTime('now', $tz);
             if ((int)$local->format('G') !== (int)App::Setting('digest_hour', 7)) {
@@ -514,12 +521,36 @@ class Reminder
             foreach ($invoices as &$i) {
                 $i['balance_text'] = money($i['total'] - $i['paid']);
             }
-            Mailer::Queue($u['email'] ?: $u['username'], $u['first_name'], 'Your day: ' . $local->format('l, M j'), 'digest', array(
-                'first_name' => $u['first_name'], 'date' => $local->format('l, F j'), 'reminders' => $reminders, 'bills' => $bills, 'invoices' => $invoices, 'url' => App::BaseUrl()
-            ));
+            if ($u['notify_digest']) {
+                Mailer::Queue($u['email'] ?: $u['username'], $u['first_name'], 'Your day: ' . $local->format('l, M j'), 'digest', array(
+                    'first_name' => $u['first_name'], 'date' => $local->format('l, F j'), 'reminders' => $reminders, 'bills' => $bills, 'invoices' => $invoices, 'url' => App::BaseUrl()
+                ));
+            }
+            if ($u['sms_digest'] && $u['phone'] && $u['phone_verified_at']) {
+                Sms::Queue($u['Id_admin_users'], $u['phone'], self::DigestText($reminders, $bills, $invoices));
+            }
             $n++;
         }
         return $n;
+    }
+
+    /** The morning summary as one short text */
+    public static function DigestText(array $reminders, array $bills, array $invoices)
+    {
+        $lines = array('Today:');
+        foreach (array_slice($reminders, 0, 5) as $r) {
+            $lines[] = '- ' . $r['title'] . ($r['overdue'] ? ' (late)' : ($r['time'] ? ' ' . $r['time'] : ''));
+        }
+        if (count($reminders) > 5) {
+            $lines[] = '+' . (count($reminders) - 5) . ' more';
+        }
+        foreach (array_slice($bills, 0, 3) as $b) {
+            $lines[] = 'Bill: ' . $b['name'] . ' ' . $b['amount_text'] . ' ' . $b['when'];
+        }
+        if ($invoices) {
+            $lines[] = count($invoices) . ' invoice' . (count($invoices) > 1 ? 's' : '') . ' past due';
+        }
+        return implode("\n", $lines);
     }
 
     private static function CleanTime($s)

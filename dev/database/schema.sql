@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS admin_users (
     Id_admin_users INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(128) NOT NULL,
     email VARCHAR(190) NULL,
+    phone VARCHAR(20) NULL,
+    phone_verified_at DATETIME NULL,
     password VARCHAR(255) NULL,
     auth_level INT NOT NULL DEFAULT 10,
     first_name VARCHAR(64) NULL,
@@ -30,6 +32,8 @@ CREATE TABLE IF NOT EXISTS admin_users (
     totp_enabled TINYINT(1) NOT NULL DEFAULT 0,
     notify_reminders TINYINT(1) NOT NULL DEFAULT 1,
     notify_digest TINYINT(1) NOT NULL DEFAULT 1,
+    sms_reminders TINYINT(1) NOT NULL DEFAULT 0,
+    sms_digest TINYINT(1) NOT NULL DEFAULT 0,
     active TINYINT(1) NOT NULL DEFAULT 1,
     last_login DATETIME NULL,
     created_at DATETIME NULL,
@@ -69,6 +73,21 @@ CREATE TABLE IF NOT EXISTS email_queue (
     sent_at DATETIME NULL,
     created_at DATETIME NOT NULL,
     KEY idx_unsent (sent_at, attempts)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Text messages waiting to go out (dev/cron.php sends them)
+CREATE TABLE IF NOT EXISTS sms_queue (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NULL,
+    to_phone VARCHAR(20) NOT NULL,
+    body VARCHAR(480) NOT NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    last_error VARCHAR(255) NULL,
+    provider_id VARCHAR(64) NULL,
+    sent_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    KEY idx_unsent (sent_at, attempts),
+    KEY idx_user_sent (user_id, sent_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS migrations (
