@@ -24,6 +24,7 @@ touch(ROOT . 'storage/cache/cron.lock'); // lets Admin → Settings see that cro
 $alerts = Reminder::QueueDueAlerts();
 $digests = Reminder::QueueDigests();
 $sent = Mailer::Flush(50);
+$texts = Sms::Flush(20);
 run('DELETE FROM rate_limits WHERE window_start < ?', array(time() - 86400));
 // Forgotten bank-import uploads
 foreach (glob(ROOT . 'storage/exports/import-*.json') ?: array() as $f) {
@@ -33,5 +34,5 @@ foreach (glob(ROOT . 'storage/exports/import-*.json') ?: array() as $f) {
 }
 
 if (in_array('-v', $argv, true)) {
-    echo "reminders queued: $alerts, digests: $digests, emails sent: $sent\n";
+    echo "reminders queued: $alerts, digests: $digests, emails sent: $sent, texts sent: $texts\n";
 }

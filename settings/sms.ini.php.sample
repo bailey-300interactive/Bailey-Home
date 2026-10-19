@@ -1,0 +1,17 @@
+<?php return; ?>
+
+[SMS]
+; Driver = twilio sends real texts. Driver = log writes them to storage/logs/sms-YYYY-MM-DD.txt (for testing)
+Driver = twilio
+
+; Twilio Console → Account → API keys & tokens → Create API key → type "Restricted",
+; and give it only Messaging → Messages → Create. Never put your Account Auth Token here.
+AccountSid = 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+ApiKeySid = 'SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+ApiKeySecret = 'the-key-secret-shown-once'
+
+; Your Twilio number in +1 format (a verified toll-free number is cheapest for personal use)
+From = '+18885550123'
+
+; Most texts one person can get per day (stops a bug or loop from running up a bill)
+DailyLimit = 25
