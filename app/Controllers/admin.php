@@ -120,7 +120,7 @@ if ($p1 === 'settings' || $p1 === '') {
     $pageVars['mail'] = array('driver' => $mail['Driver'] ?? 'smtp', 'host' => $mail['Host'] ?? '', 'from' => $mail['FromEmail'] ?? ($mail['Username'] ?? ''));
     $pageVars['queue'] = array('waiting' => (int)val('SELECT COUNT(*) FROM email_queue WHERE sent_at IS NULL AND attempts < 5'), 'failed' => (int)val('SELECT COUNT(*) FROM email_queue WHERE sent_at IS NULL AND attempts >= 5'), 'last_error' => val('SELECT last_error FROM email_queue WHERE last_error IS NOT NULL ORDER BY id DESC LIMIT 1'));
     $pageVars['cron_ok'] = is_file(ROOT . 'storage/cache/cron.lock') && filemtime(ROOT . 'storage/cache/cron.lock') > time() - 600;
-    $pageVars['writable'] = array_filter(array('storage/receipts', 'storage/logs', 'storage/cache', 'storage/exports'), function ($d) { return !is_writable(ROOT . $d); });
+    $pageVars['writable'] = array_filter(array('storage/receipts', 'storage/logs', 'storage/cache', 'storage/exports', 'storage/sessions'), function ($d) { return !is_writable(ROOT . $d); });
     $pageVars['https'] = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
     $base['page_title'] = 'Settings';
     $pageNeeded = 'admin/settings';

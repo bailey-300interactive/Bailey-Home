@@ -105,6 +105,27 @@
         </div>
 
         <div class="card">
+            <div class="card-header"><h5 class="card-title">Signed-in devices</h5></div>
+            <div class="card-body small">
+                {% if data.devices %}
+                    <p class="text-muted">These stay signed in for {{ constant('REMEMBER_DAYS') }} days after they were last used. The vault still asks for its master password.</p>
+                    <ul class="list-unstyled mb-3">
+                        {% for d in data.devices %}
+                        <li class="d-flex align-items-center py-1 {{ not loop.last ? 'border-bottom' }}">
+                            <span><strong>{{ d.name }}</strong>{% if d.current %} <span class="chip chip-green ms-1">This device</span>{% endif %}<br><span class="text-muted">Last used {{ d.last_used_at|local('M j, g:i A') }} · {{ d.ip }}</span></span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% if data.devices|length > 1 or not data.devices[0].current %}
+                    <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="devices-signout"><button class="btn btn-light btn-sm">Sign out all other devices</button></form>
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted mb-0">No devices are kept signed in. Tick "Keep me signed in" when you sign in to stay signed in on that device.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
             <div class="card-header d-flex align-items-center"><h5 class="card-title">Two-step verification</h5>
                 {% if u.totp_enabled %}<span class="chip chip-green ms-auto">On</span>{% else %}<span class="chip chip-amber ms-auto">Off</span>{% endif %}
             </div>

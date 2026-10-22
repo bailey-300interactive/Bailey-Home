@@ -49,6 +49,23 @@ Add it to the iPad / iPhone Home Screen (Share → Add to Home Screen) and it op
   you can start again.
 - Unlock tries are rate limited. Logins lock for 10 minutes after 5 wrong passwords. Two-step verification is on the Profile page.
 
+## Staying signed in
+
+Tick **Keep me signed in** when you sign in (on by default) and that device stays signed in for 30 days after you last used it.
+
+- Sessions are saved in `storage/sessions`, not PHP's shared folder. In the shared folder the server's own cleanup (Debian's
+  `sessionclean` cron, or another site's PHP) deletes them after php.ini's 24 minutes, whatever the app asks for. That was
+  the "signed out every time" bug. `storage/sessions` must be writable by the web server (`sudo chown -R www-data:www-data storage`);
+  Admin → Settings warns if it isn't.
+- The `home_remember` cookie is `selector.validator`, HttpOnly, Secure and SameSite=Lax. The database keeps only a SHA-256 hash of
+  the validator, so a copy of the database can't be turned into a working cookie.
+- The validator changes every time the cookie signs you back in. The old one keeps working for 2 minutes so pages that send several
+  requests at once don't trip over it. Each device keeps its form token, so tabs left open keep working.
+- Signing out forgets that device. Changing your password, or **Profile → Signed-in devices → Sign out all other devices**, forgets
+  the rest. A turned-off login can't come back in from a cookie.
+- The vault is never unlocked from the cookie. It still asks for its master password.
+- Change the lengths in `configuration.php` (`SESSION_IDLE_SECONDS`, `REMEMBER_DAYS`).
+
 ## Bringing over your old passwords
 
 **From the browser:** sign in, open **Vault**, set your master password, save the recovery code, then **Import & export →
@@ -169,7 +186,7 @@ public/views/        bases/ · pages/ (vault, money, reminders, time, admin) · 
 public/mail/         email templates (header/footer partials like the framework)
 public/assets/       home.css · home.js (alerts, ajax + CSRF, timer, quick add, search, shortcuts, charts) · vault.js · icons
 public/vendor/       AdminKit Pro dist (css/js/fonts, includes ApexCharts + feather), jQuery, Inter font, QR code, EFF word list
-storage/             receipts/, logs/, cache/, exports/ (never served directly)
+storage/             receipts/, logs/, cache/, exports/, sessions/ (never served directly)
 dev/                 install.php · cron.php · import-accounts.php · router.php · database/schema.sql · database/demo.php · database/migrations/
 ```
 

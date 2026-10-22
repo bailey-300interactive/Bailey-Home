@@ -26,6 +26,7 @@ $digests = Reminder::QueueDigests();
 $sent = Mailer::Flush(50);
 $texts = Sms::Flush(20);
 run('DELETE FROM rate_limits WHERE window_start < ?', array(time() - 86400));
+run('DELETE FROM auth_tokens WHERE expires_at < ?', array(App::UtcNow()));
 // Forgotten bank-import uploads
 foreach (glob(ROOT . 'storage/exports/import-*.json') ?: array() as $f) {
     if (filemtime($f) < time() - 86400) {

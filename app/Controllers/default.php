@@ -92,8 +92,11 @@ if ($p === 'profile') {
                 if ($problem = AdminUser::PasswordProblem($_POST['new'] ?? '')) {
                     throw new RuntimeException($problem);
                 }
-                AdminUser::SetPassword($uid, $_POST['new']);
-                App::QueueMessage('Login password changed.');
+                AdminUser::SetPassword($uid, $_POST['new'], $_SESSION['remember_selector'] ?? null);
+                App::QueueMessage('Login password changed. Other devices were signed out.');
+            } elseif ($action === 'devices-signout') {
+                AdminUser::ForgetAll($uid, $_SESSION['remember_selector'] ?? null);
+                App::QueueMessage('Signed out on your other devices. They\'ll need your password next time.');
             } elseif ($action === 'sms-send-code') {
                 $phone = Sms::StartVerify($uid, post('phone'));
                 App::QueueMessage('Code sent to ' . Sms::Pretty($phone) . '.');
@@ -156,6 +159,7 @@ if ($p === 'profile') {
     if ($pageVars['sms']['pending']) {
         $pageVars['sms']['pending_pretty'] = Sms::Pretty($pageVars['sms']['pending']);
     }
+    $pageVars['devices'] = AdminUser::Devices($uid);
     $base['page_title'] = 'Profile';
     $pageNeeded = 'profile';
     return;

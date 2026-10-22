@@ -210,6 +210,11 @@ class App
         return ((int)$r['hits'] + 1) <= $max;
     }
 
+    public static function IsHttps()
+    {
+        return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    }
+
     public static function ClientIp()
     {
         return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';

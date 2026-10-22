@@ -23,9 +23,135 @@ class AdminUser extends Crud
         return row('SELECT * FROM admin_users WHERE username = ? OR email = ? LIMIT 1', array(trim((string)$username), trim((string)$username)));
     }
 
-    public static function SetPassword($uid, $password)
+    /** Changing a password also signs out every "kept signed in" device */
+    public static function SetPassword($uid, $password, $keepSelector = null)
     {
         run('UPDATE admin_users SET password = ?, reset_token = NULL, reset_expires = NULL, reset_password = 0, failed_logins = 0, locked_until = NULL WHERE Id_admin_users = ?', array(password_hash($password, PASSWORD_DEFAULT), $uid));
+        self::ForgetAll($uid, $keepSelector);
+    }
+
+    /* ================= Keep me signed in =================
+     *
+     * Cookie "home_remember" = selector.validator (random, 12 + 32 bytes).
+     * The database keeps the selector and only a SHA-256 hash of the validator, so a copy of the
+     * database can't be turned into a working cookie. The cookie is HttpOnly + Secure + SameSite=Lax.
+     * The validator changes every time the cookie is used to sign back in. The old one keeps working
+     * for 2 minutes, so pages that fire several requests at once don't sign you out.
+     * Signing out, changing your password, or "Sign out other devices" deletes the tokens. A turned-off
+     * login can't come back in. The vault never comes back from the cookie: it stays locked.
+     * Each device keeps its form (CSRF) token, so a tab left open still works after the session is rebuilt.
+     */
+
+    const REMEMBER_COOKIE = 'home_remember';
+    const REMEMBER_GRACE = 120;
+
+    /** Remember this device for REMEMBER_DAYS */
+    public static function Remember($uid)
+    {
+        $selector = bin2hex(random_bytes(12));
+        $validator = bin2hex(random_bytes(32));
+        insert('auth_tokens', array(
+            'user_id' => $uid, 'selector' => $selector, 'validator_hash' => hash('sha256', $validator), 'csrf' => App::CsrfToken(),
+            'user_agent' => mb_substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255), 'ip' => App::ClientIp(),
+            'created_at' => App::UtcNow(), 'last_used_at' => App::UtcNow(), 'expires_at' => gmdate('Y-m-d H:i:s', time() + REMEMBER_DAYS * 86400),
+        ));
+        self::SetRememberCookie($selector . '.' . $validator);
+        $_SESSION['remember_selector'] = $selector;
+    }
+
+    /** Sign back in from the cookie. Returns true when it worked. */
+    public static function ResumeFromCookie()
+    {
+        $raw = (string)($_COOKIE[self::REMEMBER_COOKIE] ?? '');
+        if (!preg_match('/^([a-f0-9]{24})\.([a-f0-9]{64})$/', $raw, $m)) {
+            self::ClearRememberCookie();
+            return false;
+        }
+        list(, $selector, $validator) = $m;
+        if (!App::RateLimit('remember-ip:' . App::ClientIp(), 60, 900)) {
+            return false;
+        }
+        $t = row('SELECT * FROM auth_tokens WHERE selector = ?', array($selector));
+        $hash = hash('sha256', $validator);
+        $ok = $t && $t['expires_at'] > App::UtcNow() && (hash_equals($t['validator_hash'], $hash)
+            || ($t['prev_hash'] && hash_equals($t['prev_hash'], $hash) && strtotime($t['rotated_at'] . ' UTC') > time() - self::REMEMBER_GRACE));
+        $u = $ok ? row('SELECT * FROM admin_users WHERE Id_admin_users = ? AND active = 1', array($t['user_id'])) : null;
+        if (!$u) {
+            if ($t && !$ok && $t['expires_at'] <= App::UtcNow()) {
+                run('DELETE FROM auth_tokens WHERE id = ?', array($t['id']));
+            }
+            self::ClearRememberCookie();
+            return false;
+        }
+
+        self::StartSession($u);
+        $_SESSION['remember_selector'] = $selector;
+        // Same form token as before, so pages that were already open keep working
+        if (!empty($t['csrf'])) {
+            $_SESSION['csrf'] = $t['csrf'];
+        }
+        if (hash_equals($t['validator_hash'], $hash)) {
+            // New validator for next time, and push the expiry out
+            $next = bin2hex(random_bytes(32));
+            run('UPDATE auth_tokens SET prev_hash = validator_hash, validator_hash = ?, rotated_at = ?, last_used_at = ?, ip = ?, expires_at = ? WHERE id = ?',
+                array(hash('sha256', $next), App::UtcNow(), App::UtcNow(), App::ClientIp(), gmdate('Y-m-d H:i:s', time() + REMEMBER_DAYS * 86400), $t['id']));
+            self::SetRememberCookie($selector . '.' . $next);
+        }
+        return true;
+    }
+
+    /** Forget this device (signing out) */
+    public static function ForgetThisDevice()
+    {
+        $raw = (string)($_COOKIE[self::REMEMBER_COOKIE] ?? '');
+        $selector = $_SESSION['remember_selector'] ?? (preg_match('/^([a-f0-9]{24})\./', $raw, $m) ? $m[1] : null);
+        if ($selector) {
+            run('DELETE FROM auth_tokens WHERE selector = ?', array($selector));
+        }
+        self::ClearRememberCookie();
+    }
+
+    /** Forget every device for a person, except $keepSelector (this one) when given */
+    public static function ForgetAll($uid, $keepSelector = null)
+    {
+        run('DELETE FROM auth_tokens WHERE user_id = ? AND selector <> ?', array($uid, (string)$keepSelector));
+    }
+
+    /** Devices that are kept signed in, newest first */
+    public static function Devices($uid)
+    {
+        $list = rows('SELECT selector, user_agent, ip, created_at, last_used_at FROM auth_tokens WHERE user_id = ? AND expires_at > ? ORDER BY last_used_at DESC', array($uid, App::UtcNow()));
+        foreach ($list as &$d) {
+            $d['name'] = self::DeviceName($d['user_agent']);
+            $d['current'] = $d['selector'] === ($_SESSION['remember_selector'] ?? '');
+            unset($d['selector']);
+        }
+        return $list;
+    }
+
+    /** "Safari on iPhone" from a user agent */
+    public static function DeviceName($ua)
+    {
+        $ua = (string)$ua;
+        $os = str_contains($ua, 'iPhone') ? 'iPhone' : (str_contains($ua, 'iPad') ? 'iPad' : (str_contains($ua, 'Android') ? 'Android'
+            : (str_contains($ua, 'Mac OS X') ? 'Mac' : (str_contains($ua, 'Windows') ? 'Windows' : (str_contains($ua, 'Linux') ? 'Linux' : 'Unknown device')))));
+        $browser = preg_match('/Edg\//', $ua) ? 'Edge' : (preg_match('/(Chrome|CriOS)\//', $ua) ? 'Chrome' : (preg_match('/(Firefox|FxiOS)\//', $ua) ? 'Firefox'
+            : (str_contains($ua, 'Safari') ? 'Safari' : '')));
+        return $browser ? "$browser on $os" : $os;
+    }
+
+    private static function SetRememberCookie($value)
+    {
+        setcookie(self::REMEMBER_COOKIE, $value, array('expires' => time() + REMEMBER_DAYS * 86400, 'path' => '/', 'secure' => App::IsHttps(), 'httponly' => true, 'samesite' => 'Lax'));
+        $_COOKIE[self::REMEMBER_COOKIE] = $value;
+    }
+
+    private static function ClearRememberCookie()
+    {
+        if (!headers_sent()) {
+            setcookie(self::REMEMBER_COOKIE, '', array('expires' => time() - 3600, 'path' => '/', 'secure' => App::IsHttps(), 'httponly' => true, 'samesite' => 'Lax'));
+        }
+        unset($_COOKIE[self::REMEMBER_COOKIE]);
     }
 
     public static function PasswordProblem($password)

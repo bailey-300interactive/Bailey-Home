@@ -4,6 +4,7 @@ define('ROOT', realpath(__DIR__) . '/');
 require(ROOT . 'app/init.php');
 
 Vault::Lock();
+AdminUser::ForgetThisDevice();
 $_SESSION = array();
 if (ini_get('session.use_cookies')) {
     $p = session_get_cookie_params();
