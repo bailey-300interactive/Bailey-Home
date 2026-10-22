@@ -17,7 +17,10 @@
                     <label class="form-label" for="password">Password</label>
                     <input class="form-control form-control-lg" type="password" id="password" name="password" autocomplete="current-password" required>
                 </div>
-                <div class="mb-3 text-end"><a href="/reset-password" class="small">Forgot password?</a></div>
+                <div class="mb-3 d-flex align-items-center">
+                    <label class="form-check mb-0 small"><input class="form-check-input" type="checkbox" id="remember" checked> <span class="form-check-label">Keep me signed in for {{ constant('REMEMBER_DAYS') }} days</span></label>
+                    <a href="/reset-password" class="small ms-auto">Forgot password?</a>
+                </div>
                 <div class="d-grid"><button type="submit" class="btn btn-lg btn-primary">Sign in</button></div>
             </form>
 
@@ -39,7 +42,7 @@ $(function () {
     $('#login-form').on('submit', function (e) {
         e.preventDefault();
         const btn = $(this).find('button').prop('disabled', true);
-        api('/app/Ajax/authentication.php', { action: 'login', username: $('#username').val(), password: $('#password').val() })
+        api('/app/Ajax/authentication.php', { action: 'login', username: $('#username').val(), password: $('#password').val(), remember: $('#remember').is(':checked') ? 1 : 0 })
             .then(function (r) {
                 if (r.twofa) { $('#login-form').addClass('hidden'); $('#totp-form').removeClass('hidden').find('input').trigger('focus'); return; }
                 window.location = r.redirect || '/';

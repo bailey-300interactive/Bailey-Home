@@ -92,8 +92,36 @@ if ($p === 'profile') {
                 if ($problem = AdminUser::PasswordProblem($_POST['new'] ?? '')) {
                     throw new RuntimeException($problem);
                 }
-                AdminUser::SetPassword($uid, $_POST['new']);
-                App::QueueMessage('Login password changed.');
+                AdminUser::SetPassword($uid, $_POST['new'], $_SESSION['remember_selector'] ?? null);
+                App::QueueMessage('Login password changed. Other devices were signed out.');
+            } elseif ($action === 'devices-signout') {
+                AdminUser::ForgetAll($uid, $_SESSION['remember_selector'] ?? null);
+                App::QueueMessage('Signed out on your other devices. They\'ll need your password next time.');
+            } elseif ($action === 'sms-send-code') {
+                $phone = Sms::StartVerify($uid, post('phone'));
+                App::QueueMessage('Code sent to ' . Sms::Pretty($phone) . '.');
+            } elseif ($action === 'sms-confirm') {
+                $phone = Sms::FinishVerify($uid, post('code'));
+                run('UPDATE admin_users SET sms_reminders = 1 WHERE Id_admin_users = ?', array($uid));
+                App::QueueMessage('Texts will go to ' . Sms::Pretty($phone) . '.');
+            } elseif ($action === 'sms-cancel') {
+                unset($_SESSION['sms_verify']);
+            } elseif ($action === 'sms-prefs') {
+                run('UPDATE admin_users SET sms_reminders = ?, sms_digest = ? WHERE Id_admin_users = ?', array(post_bool('sms_reminders'), post_bool('sms_digest'), $uid));
+                App::QueueMessage('Text settings saved.');
+            } elseif ($action === 'sms-test') {
+                $u = row('SELECT * FROM admin_users WHERE Id_admin_users = ?', array($uid));
+                if (!$u['phone_verified_at'] || !App::RateLimit('sms-test:' . $uid, 3, 3600)) {
+                    throw new RuntimeException('Confirm your number first (and at most 3 tests an hour).');
+                }
+                $r = Sms::Send($u['phone'], 'Test from ' . App::Setting('site_name', 'Home') . ': texts are working.');
+                if (!$r['ok']) {
+                    throw new RuntimeException($r['error']);
+                }
+                App::QueueMessage('Test text sent.');
+            } elseif ($action === 'sms-remove') {
+                run('UPDATE admin_users SET phone = NULL, phone_verified_at = NULL, sms_reminders = 0, sms_digest = 0 WHERE Id_admin_users = ?', array($uid));
+                App::QueueMessage('Phone number removed. No more texts.', 'warning');
             } elseif ($action === '2fa-start') {
                 $_SESSION['totp_setup'] = Totp::NewSecret();
             } elseif ($action === '2fa-confirm') {
@@ -127,6 +155,11 @@ if ($p === 'profile') {
         $pageVars['totp_uri'] = Totp::Uri($_SESSION['totp_setup'], $user['username'], App::Setting('site_name', 'Home'));
     }
     $pageVars['vault'] = Vault::KeyRow($uid);
+    $pageVars['sms'] = array('enabled' => Sms::Enabled(), 'pending' => $_SESSION['sms_verify']['phone'] ?? null, 'pretty' => Sms::Pretty($user['phone']));
+    if ($pageVars['sms']['pending']) {
+        $pageVars['sms']['pending_pretty'] = Sms::Pretty($pageVars['sms']['pending']);
+    }
+    $pageVars['devices'] = AdminUser::Devices($uid);
     $base['page_title'] = 'Profile';
     $pageNeeded = 'profile';
     return;

@@ -67,6 +67,65 @@
         </div>
 
         <div class="card">
+            <div class="card-header d-flex align-items-center"><h5 class="card-title">Text messages</h5>
+                {% if u.phone_verified_at %}<span class="chip chip-green ms-auto">{{ data.sms.pretty }}</span>{% endif %}
+            </div>
+            <div class="card-body">
+                {% if not data.sms.enabled %}
+                    <p class="small text-muted mb-0">Texting isn't set up on this server yet. An admin adds Twilio details to <code>settings/sms.ini.php</code> (see the README).</p>
+                {% elseif data.sms.pending %}
+                    <p class="small">We texted a 6-digit code to <strong>{{ data.sms.pending_pretty }}</strong>. Type it here:</p>
+                    <form method="post" class="d-flex gap-2">
+                        {{ csrf_field() }}<input type="hidden" name="action" value="sms-confirm">
+                        <input name="code" class="form-control" inputmode="numeric" maxlength="7" placeholder="123456" autocomplete="one-time-code" required>
+                        <button class="btn btn-primary text-nowrap">Confirm</button>
+                    </form>
+                    <form method="post" class="mt-2">{{ csrf_field() }}<input type="hidden" name="action" value="sms-cancel"><button class="btn btn-link btn-sm p-0">Use a different number</button></form>
+                {% elseif u.phone_verified_at %}
+                    <form method="post">
+                        {{ csrf_field() }}<input type="hidden" name="action" value="sms-prefs">
+                        <label class="form-check"><input type="checkbox" class="form-check-input" name="sms_reminders" value="1" {{ u.sms_reminders ? 'checked' }}> <span class="form-check-label">Text me when a reminder with a time is due</span></label>
+                        <label class="form-check"><input type="checkbox" class="form-check-input" name="sms_digest" value="1" {{ u.sms_digest ? 'checked' }}> <span class="form-check-label">Morning text with what's due today</span></label>
+                        <button class="btn btn-light btn-sm mt-2">Save</button>
+                    </form>
+                    <div class="d-flex gap-3 mt-3 small">
+                        <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="sms-test"><button class="btn btn-link btn-sm p-0">Send a test text</button></form>
+                        <form method="post" data-confirm="Remove your number and stop all texts?">{{ csrf_field() }}<input type="hidden" name="action" value="sms-remove"><button class="btn btn-link btn-sm p-0 text-danger">Remove number</button></form>
+                    </div>
+                    <div class="small-muted mt-2">Reply STOP to any text to turn them off from your phone.</div>
+                {% else %}
+                    <p class="small text-muted">Get reminders and the morning summary as texts. We'll send a code to confirm the number.</p>
+                    <form method="post" class="d-flex gap-2">
+                        {{ csrf_field() }}<input type="hidden" name="action" value="sms-send-code">
+                        <input name="phone" type="tel" class="form-control" placeholder="(724) 555-0123" autocomplete="tel" required>
+                        <button class="btn btn-primary text-nowrap">Send code</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h5 class="card-title">Signed-in devices</h5></div>
+            <div class="card-body small">
+                {% if data.devices %}
+                    <p class="text-muted">These stay signed in for {{ constant('REMEMBER_DAYS') }} days after they were last used. The vault still asks for its master password.</p>
+                    <ul class="list-unstyled mb-3">
+                        {% for d in data.devices %}
+                        <li class="d-flex align-items-center py-1 {{ not loop.last ? 'border-bottom' }}">
+                            <span><strong>{{ d.name }}</strong>{% if d.current %} <span class="chip chip-green ms-1">This device</span>{% endif %}<br><span class="text-muted">Last used {{ d.last_used_at|local('M j, g:i A') }} · {{ d.ip }}</span></span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% if data.devices|length > 1 or not data.devices[0].current %}
+                    <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="devices-signout"><button class="btn btn-light btn-sm">Sign out all other devices</button></form>
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted mb-0">No devices are kept signed in. Tick "Keep me signed in" when you sign in to stay signed in on that device.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
             <div class="card-header d-flex align-items-center"><h5 class="card-title">Two-step verification</h5>
                 {% if u.totp_enabled %}<span class="chip chip-green ms-auto">On</span>{% else %}<span class="chip chip-amber ms-auto">Off</span>{% endif %}
             </div>

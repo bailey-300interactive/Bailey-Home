@@ -166,7 +166,7 @@ if ((int)val('SELECT COUNT(*) FROM services') === 0) {
 }
 
 /* ---------- Folders ---------- */
-foreach (array('storage/receipts', 'storage/logs', 'storage/cache', 'storage/exports') as $d) {
+foreach (array('storage/receipts', 'storage/logs', 'storage/cache', 'storage/exports', 'storage/sessions') as $d) {
     if (!is_dir(ROOT . $d)) {
         @mkdir(ROOT . $d, 0775, true);
     }

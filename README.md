@@ -49,6 +49,23 @@ Add it to the iPad / iPhone Home Screen (Share → Add to Home Screen) and it op
   you can start again.
 - Unlock tries are rate limited. Logins lock for 10 minutes after 5 wrong passwords. Two-step verification is on the Profile page.
 
+## Staying signed in
+
+Tick **Keep me signed in** when you sign in (on by default) and that device stays signed in for 30 days after you last used it.
+
+- Sessions are saved in `storage/sessions`, not PHP's shared folder. In the shared folder the server's own cleanup (Debian's
+  `sessionclean` cron, or another site's PHP) deletes them after php.ini's 24 minutes, whatever the app asks for. That was
+  the "signed out every time" bug. `storage/sessions` must be writable by the web server (`sudo chown -R www-data:www-data storage`);
+  Admin → Settings warns if it isn't.
+- The `home_remember` cookie is `selector.validator`, HttpOnly, Secure and SameSite=Lax. The database keeps only a SHA-256 hash of
+  the validator, so a copy of the database can't be turned into a working cookie.
+- The validator changes every time the cookie signs you back in. The old one keeps working for 2 minutes so pages that send several
+  requests at once don't trip over it. Each device keeps its form token, so tabs left open keep working.
+- Signing out forgets that device. Changing your password, or **Profile → Signed-in devices → Sign out all other devices**, forgets
+  the rest. A turned-off login can't come back in from a cookie.
+- The vault is never unlocked from the cookie. It still asks for its master password.
+- Change the lengths in `configuration.php` (`SESSION_IDLE_SECONDS`, `REMEMBER_DAYS`).
+
 ## Bringing over your old passwords
 
 **From the browser:** sign in, open **Vault**, set your master password, save the recovery code, then **Import & export →
@@ -123,6 +140,36 @@ Try it locally without Apache: `php -S localhost:8000 dev/router.php` (does what
 
 Receipts: `.htaccess` (mod_php) and `.user.ini` (PHP-FPM) allow 20 MB uploads.
 
+## Text messages (Twilio)
+
+Reminder alerts and the morning summary can go out as texts as well as emails. Each person turns them on under **Profile → Text messages**
+after confirming their number with a 6-digit code.
+
+Setup:
+
+1. In Twilio, buy a **toll-free number** and submit toll-free verification (free; usually a few days). Toll-free is the cheapest legal
+   way to send app texts in the US: no 10DLC brand/campaign fees. Cost is about $2/mo for the number plus roughly $0.008 a text and
+   carrier fees.
+2. Twilio Console → API keys → **Create API key → Restricted**. Give it only *Messaging → Messages → Create*. Don't use the account
+   Auth Token. If this key ever leaks, it can only send texts, and you can delete it without touching anything else.
+3. On the server:
+   ```bash
+   cp settings/sms.ini.php.sample settings/sms.ini.php   # fill in AccountSid, ApiKeySid, ApiKeySecret, From
+   php dev/install.php                                    # adds the phone columns and sms_queue table
+   php dev/sms-test.php 7245550123                        # sends one text and prints SENT or the Twilio error
+   ```
+   `Driver = log` writes texts to `storage/logs/sms-*.txt` instead of sending (for testing).
+
+How it stays cheap and safe:
+
+- Calls go out over HTTPS with certificate checks. The site has no Twilio webhook, so there's nothing for anyone to call in.
+  Twilio handles STOP/HELP replies itself.
+- Numbers must be confirmed by code before anything is texted to them. Codes are stored hashed, expire in 10 minutes, allow 5 tries,
+  and you can request 5 per hour.
+- `DailyLimit` (default 25) caps texts per person per day. Texts are cut down to plain characters, because a single emoji makes a text
+  cost 2–3x, and are capped at 3 segments. Reminders more than 3 hours overdue are not texted, so switching texts on doesn't send a burst.
+- `dev/cron.php` sends the queue (`sms_queue`). Failures are retried 3 times and logged.
+
 ## How it's built (and what changed from the framework)
 
 ```
@@ -139,7 +186,7 @@ public/views/        bases/ · pages/ (vault, money, reminders, time, admin) · 
 public/mail/         email templates (header/footer partials like the framework)
 public/assets/       home.css · home.js (alerts, ajax + CSRF, timer, quick add, search, shortcuts, charts) · vault.js · icons
 public/vendor/       AdminKit Pro dist (css/js/fonts, includes ApexCharts + feather), jQuery, Inter font, QR code, EFF word list
-storage/             receipts/, logs/, cache/, exports/ (never served directly)
+storage/             receipts/, logs/, cache/, exports/, sessions/ (never served directly)
 dev/                 install.php · cron.php · import-accounts.php · router.php · database/schema.sql · database/demo.php · database/migrations/
 ```
 

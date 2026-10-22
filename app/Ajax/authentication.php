@@ -23,12 +23,15 @@ if ($action === 'login') {
     switch ($status) {
         case 'ok':
             AdminUser::StartSession($u);
+            if (post_bool('remember')) {
+                AdminUser::Remember($u['Id_admin_users']);
+            }
             $to = $_SESSION['after_login'] ?? '/';
             unset($_SESSION['after_login']);
             json_out(array('result' => true, 'message' => 'Signed in', 'redirect' => str_starts_with($to, '/') && !str_starts_with($to, '//') ? $to : '/'));
         case '2fa':
             session_regenerate_id(true);
-            $_SESSION['pending_2fa'] = array('uid' => (int)$u['Id_admin_users'], 'until' => time() + 300);
+            $_SESSION['pending_2fa'] = array('uid' => (int)$u['Id_admin_users'], 'until' => time() + 300, 'remember' => post_bool('remember'));
             json_out(array('result' => true, 'twofa' => true, 'message' => 'Enter the 6-digit code from your authenticator app.'));
         case 'locked':
             json_out(array('result' => false, 'message' => 'Too many wrong passwords. This login is locked for ' . AdminUser::LOCK_MINUTES . ' minutes.'));
@@ -52,6 +55,9 @@ if ($action === 'totp') {
     $u = row('SELECT * FROM admin_users WHERE Id_admin_users = ?', array($p['uid']));
     if ($u && $u['totp_secret'] && Totp::Verify($u['totp_secret'], post('code'))) {
         AdminUser::StartSession($u);
+        if (!empty($p['remember'])) {
+            AdminUser::Remember($u['Id_admin_users']);
+        }
         $to = $_SESSION['after_login'] ?? '/';
         unset($_SESSION['after_login']);
         json_out(array('result' => true, 'message' => 'Signed in', 'redirect' => str_starts_with($to, '/') && !str_starts_with($to, '//') ? $to : '/'));

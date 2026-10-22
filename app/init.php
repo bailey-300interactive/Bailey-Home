@@ -28,7 +28,15 @@ if (PHP_SAPI !== 'cli' && session_status() === PHP_SESSION_NONE) {
         'samesite' => 'Lax'
     ));
     ini_set('session.use_strict_mode', '1');
-    ini_set('session.gc_maxlifetime', '43200');
+    ini_set('session.gc_maxlifetime', (string)SESSION_IDLE_SECONDS);
+    // Keep our session files in our own folder. In the shared system folder, the server's own cleanup
+    // (Debian's sessionclean cron, or another site's PHP) deletes them after php.ini's 24 minutes,
+    // which signs you out no matter what gc_maxlifetime says above.
+    if (is_dir(ROOT . 'storage/sessions') && is_writable(ROOT . 'storage/sessions')) {
+        session_save_path(ROOT . 'storage/sessions');
+        ini_set('session.gc_probability', '1');
+        ini_set('session.gc_divisor', '100');
+    }
     session_start();
 }
 
@@ -51,4 +59,13 @@ if (PHP_SAPI !== 'cli' && !headers_sent()) {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: same-origin');
+}
+
+// Session ended but this device was "kept signed in": sign back in from the cookie
+if (PHP_SAPI !== 'cli' && empty($_SESSION['authenticated']) && !empty($_COOKIE[AdminUser::REMEMBER_COOKIE])) {
+    try {
+        AdminUser::ResumeFromCookie();
+    } catch (Throwable $e) {
+        // before install, or the database is down: carry on signed out
+    }
 }

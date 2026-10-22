@@ -7,6 +7,7 @@ storage/receipts/*
 storage/logs/*
 storage/cache/*
 storage/exports/*
+storage/sessions/*
 !storage/**/.gitkeep
 !storage/.htaccess
 

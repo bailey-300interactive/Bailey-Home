@@ -26,6 +26,11 @@ define('STORAGE', ROOT . 'storage/');
 define('ADMIN', 0);
 define('MEMBER', 10);
 
+// Signing in: a session lasts this long with no activity. "Keep me signed in" brings you
+// back in automatically for REMEMBER_DAYS (each visit pushes it out again).
+define('SESSION_IDLE_SECONDS', 12 * 3600);
+define('REMEMBER_DAYS', 30);
+
 // Version of the database schema this code expects (see dev/database/migrations)
 define('SCHEMA_VERSION', 1);
 
